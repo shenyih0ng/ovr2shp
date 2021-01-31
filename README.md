@@ -14,6 +14,6 @@ ERDAS also provided a detailed documentation explaining the internals of HFA str
 
 ### References
 
-[img2tif]: http://web.archive.org/web/20130730133056/http://home.gdal.org/projects/imagine/hfa_index.html
+[img2tif](http://web.archive.org/web/20130730133056/http://home.gdal.org/projects/imagine/hfa_index.html)
 
-[Detail Documentation]: /docs/hfa.pdf 
+[Detail Documentation](/docs/hfa.pdf)
