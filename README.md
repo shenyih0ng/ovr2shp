@@ -17,3 +17,5 @@ ERDAS also provided a detailed documentation explaining the internals of HFA str
 [img2tif](http://web.archive.org/web/20130730133056/http://home.gdal.org/projects/imagine/hfa_index.html)
 
 [Detail Documentation](/docs/hfa.pdf)
+
+[Sample Data](https://download.hexagongeospatial.com/en/downloads/imagine/erdas-imagine-remote-sensing-example-data)
