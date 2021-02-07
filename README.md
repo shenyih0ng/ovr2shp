@@ -10,11 +10,6 @@ ERDAS also provided a detailed documentation explaining the internals of HFA str
 
 - [ ] Shapefile+GeoJSON creation
 
-## Interesting findings
-
-- When comparing `HFAEntry->GetType() == "Eant_Ellipse"`, it resolves to `false`, however when I would to compare to a `string` instead of a literal, it works as expected.
-	- Could it because `HFAEntry->GetType()` is of `const char*`
-
 ### References
 
 [img2tif](http://web.archive.org/web/20130730133056/http://home.gdal.org/projects/imagine/hfa_index.html)

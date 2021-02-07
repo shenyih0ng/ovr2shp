@@ -120,23 +120,38 @@ vector<HFAAnnotation*> processEant (vector<HFAEntry*> eantElements) {
 }
 
 int main (int argc, char* argv[]) {
+	bool displayTree = false;
+	const string displayFlag = "-d"; //temp
+
 	const char *file_name = NULL;
 	HFAHandle hHFA;
 	HFAEntry* root;
+	
+	for (int i = 1; i < argc; i++){
+		if (argv[i] == displayFlag) {
+			displayTree = true;
+		} else if (file_name == NULL) {
+			file_name = argv[i];
+		}
+	}
 
-	if (argc > 1) {
-		file_name = argv[1];
+	if (file_name != NULL) {
 		printf("f: %s\n", file_name);
 		hHFA = HFAOpen(file_name, "r");
+	} else {
+		exit(1);
 	}
+
 	if (hHFA == NULL) {
 		printf("[x] HFAOpen() failed.\n");
 		exit(100);	
 	}
 
 	root = hHFA-> poRoot;
-	//cout << "---tree display---" << endl;
-	//display(root);
+	if (displayTree) {
+		cout << "---tree display---" << endl;
+		display(root);
+	}
 	
 	set<string> dtypes = {EANT_DTYPE_NAME, EANT_GROUP_DTYPE_NAME};
 	vector<HFAEntry*> eantElements = find(root, dtypes);
