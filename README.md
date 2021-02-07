@@ -6,11 +6,14 @@ ERDAS also provided a detailed documentation explaining the internals of HFA str
 
 ## TODOS
 
-- [ ] Generalize `get_ellipse` & `get_rectangle` functions
-
 - [ ] Extract coordinate reference system if exist
 
 - [ ] Shapefile+GeoJSON creation
+
+## Interesting findings
+
+- When comparing `HFAEntry->GetType() == "Eant_Ellipse"`, it resolves to `false`, however when I would to compare to a `string` instead of a literal, it works as expected.
+	- Could it because `HFAEntry->GetType()` is of `const char*`
 
 ### References
 

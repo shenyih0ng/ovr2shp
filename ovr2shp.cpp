@@ -1,36 +1,37 @@
-#include <iostream>
-#include <stdio.h>
+#include <set>
 #include <vector>
+#include <stdio.h>
 #include "hfa_p.h"
+#include "hfaclasses.h"
 
 using namespace std;
 
 /*
  * Goal: Convert .ovr to .shp/.geojson
- * 1. Extract all AntElement with its meta + geom data
  * 2. Extract coordinate system of annotation (if there is one)
  * 3. Parse it into a .shp/.geojson format
  */
 
-string GEOM_TYPE[] = {"Rectangle2", "Eant_Ellipse"};
+const string EANT_DTYPE_NAME = "Element_Eant";
+const string EANT_GROUP_DTYPE_NAME = "Element_2_Eant";
 
-struct ellipse
-{
-	double* center;
-	double majorAxis;
-	double minorAxis;
-	double orientation;
+const string ELLI_DTYPE_NAME = "Eant_Ellipse";
+const string RECT_DTYPE_NAME = "Rectangle2";
+
+const unordered_map<string, HFAGeomFactory*> hfaGeomFactories = {
+	{ELLI_DTYPE_NAME, new HFAEllipseFactory()},
+	{RECT_DTYPE_NAME, new HFARectangleFactory()}
 };
 
-struct rectangle 
-{
-	double* center;
-	double width;
-	double height;
-	double orientation;
-};
-
-// UTILITIES
+/*
+ * display [utility]
+ *
+ * Tree view of HFA structure
+ * - displays the name, dtype and size of HFA nodes
+ *
+ * @para node 	HFAEntry* start node
+ * @para nIdent	int	  indentation prefix
+ * */
 void display (HFAEntry* node, int nIdent=0) {
 	for (int i=0; i < nIdent; i++) {cout << "\t";}
 	printf("%s<%s> %d\n", node->GetName(), node->GetType(), node->GetDataSize());
@@ -38,24 +39,25 @@ void display (HFAEntry* node, int nIdent=0) {
 	if (node->GetNext() != NULL) {display(node->GetNext(), nIdent);}
 }
 
-void display(ellipse e) {
-	printf("center: (%f, %f) ", e.center[0], e.center[1]);
-	printf("majX: %f minX: %f ori: %f\n", e.majorAxis, e.minorAxis, e.orientation);
-}
-
-void display(rectangle r) {
-	printf("center: (%f, %f) ", r.center[0], r.center[1]);
-	printf("w: %f h: %f ori: %f\n", r.width, r.height, r.orientation);
-}
-
-vector<HFAEntry*> find (HFAEntry* node, string dtype_name) {
+/*
+ * find [utility]
+ *
+ * Retrieve HFA nodes of specified type using recursive search
+ *
+ * @param node 	HFAEntry* start node
+ * @param dtype_names set specified types
+ *
+ * @return vector<HFAEntry*> collection of HFAEntry of specified type
+ *
+ */
+vector<HFAEntry*> find (HFAEntry* node, set<string> dtype_names) {
 	vector<HFAEntry*> nodes_found;
 	vector<HFAEntry*> to_search;
 	to_search.push_back(node);
 	while(!to_search.empty()) {
 		HFAEntry* curr_node = to_search.back();
 		to_search.pop_back();
-		if(curr_node->GetType() == dtype_name) {
+		if(dtype_names.find(curr_node->GetType()) != dtype_names.end()) {
 			nodes_found.push_back(curr_node);
 		}
 		if (curr_node->GetNext() != NULL) {
@@ -69,116 +71,53 @@ vector<HFAEntry*> find (HFAEntry* node, string dtype_name) {
 	return nodes_found;
 }
 
-// CORE
-
-double* get_center (HFAField* HFACenter, GByte* data, GInt32 dataPos, GInt32 dataSize) {
-	static double coords[2];
-
-	void* pReturn;
-	HFACenter->ExtractInstValue(NULL, 0, data, dataPos, dataSize, 'p', &pReturn);
-	int nByteOffset = ((GByte *) pReturn) - data;
-	data += nByteOffset;
-	dataPos += nByteOffset;
-	dataSize -= nByteOffset;
-
-	HFAType* centerType = HFACenter->poItemObjectType;
-	for (int jField = 0; jField < centerType->nFields; jField++) {
-		double coordVal;
-		HFAField *coord = centerType->papoFields[jField];
-		coord->ExtractInstValue(NULL, 0, data, dataPos, dataSize, 'd', &coordVal);
-		coords[jField] = coordVal;
-
-		int nInstBytes = coord->GetInstBytes(data);
-		data += nInstBytes;
-		dataPos += nInstBytes;
-		dataSize -= nInstBytes;
-	}	
-
-	return coords;
+/*
+ * find[utility]
+ *
+ * Overloaded
+ *
+ * @param node HFAEntry* start node
+ * @param dtype_name string specified type
+ *
+ */
+vector<HFAEntry*> find (HFAEntry* node, string dtype_name) {
+	set<string> dtype = {dtype_name};
+	return find(node, dtype);
 }
+/*
+ * processEant
+ *
+ * Convert HFA nodes of type "Element_Eant"/"Element_2_Eant" to HFAAnnotation
+ *
+ * @param eantElements HFAEntry* HFA nodes of "Element_Eant"/"Element_2_Eant" types
+ *
+ * @return vector<HFAAnnotation*>
+ *
+ */
+vector<HFAAnnotation*> processEant (vector<HFAEntry*> eantElements) {
+	vector<HFAAnnotation*> annotations;
+	vector<HFAEntry*>::iterator it;
+	for (it=eantElements.begin(); it != eantElements.end(); ++it) {
+		HFAEntry* eantElement = *it;
+		if (eantElement->GetChild() != NULL) {
+			const char* cType = eantElement->GetChild()->GetType();
+			unordered_map<string, HFAGeomFactory*>::const_iterator gIt = hfaGeomFactories.find(cType);
+			if (gIt != hfaGeomFactories.end()) {
+				eantElement->LoadData();
+				HFAAnnotation* hfaA = new HFAAnnotation(eantElement);
+				HFAEntry* child = eantElement->GetChild();
+				child->LoadData();
 
-ellipse get_ellipse (HFAEntry* geom_node) {
-	const string CENTER_FIELD_NAME = "center";
-	const string MAJOR_AXIS_FIELD_NAME = "semiMajorAxis";
-	const string MINOR_AXIS_FIELD_NAME = "semiMinorAxis";
-	const string ORIENTATION_FIELD_NAME = "orientation";
-
-	int iField = 0;
-	double fval;
-	HFAField *poField;
-	ellipse eObj;
-
-	HFAType* ntype = geom_node->GetPoType();
-	GByte* data = geom_node->GetData();
-	GInt32 dataPos = geom_node->GetDataPos();
-	GInt32 dataSize = geom_node->GetDataSize();
-	while (iField < ntype->nFields) {
-		poField = ntype->papoFields[iField];	
-		char* fieldName = poField->pszFieldName;
-		if (fieldName == CENTER_FIELD_NAME){
-			eObj.center = get_center(poField, data, dataPos, dataSize);
-		} else if (fieldName == MAJOR_AXIS_FIELD_NAME) {
-			poField->ExtractInstValue(NULL, 0, data, dataPos, dataSize, 'd', &fval);
-			eObj.majorAxis = fval;
-		} else if (fieldName == MINOR_AXIS_FIELD_NAME) {
-			poField->ExtractInstValue(NULL, 0, data, dataPos, dataSize, 'd', &fval);
-			eObj.minorAxis = fval;
-		} else if (fieldName == ORIENTATION_FIELD_NAME) {
-			poField->ExtractInstValue(NULL, 0, data, dataPos, dataSize, 'd', &fval);
-			eObj.orientation = fval;
+				HFAGeom* annoGeom;
+				HFAGeomFactory* factory = gIt->second;
+				annoGeom = factory->create(child);
+				hfaA->set_geom(annoGeom);
+				annotations.push_back(hfaA);
+			}
 		}
-
-		int nInstBytes = poField->GetInstBytes(data);
-		data += nInstBytes;
-		dataPos += nInstBytes;
-		dataSize -= nInstBytes;
-		iField++;	
 	}
-	
-	return eObj;
+	return annotations;
 }
-
-rectangle get_rectangle (HFAEntry* geom_node) {
-	const string CENTER_FIELD_NAME = "center";
-	const string WIDTH_FIELD_NAME = "width";
-	const string HEIGHT_FIELD_NAME = "height";
-	const string ORIENTATION_FIELD_NAME = "orientation";
-
-	int iField = 0;
-	double fval;
-	HFAField *poField;
-	rectangle rObj;
-
-	HFAType* ntype = geom_node->GetPoType();
-	GByte* data = geom_node->GetData();
-	GInt32 dataPos = geom_node->GetDataPos();
-	GInt32 dataSize = geom_node->GetDataSize();
-	while (iField < ntype->nFields) {
-		poField = ntype->papoFields[iField];	
-		char* fieldName = poField->pszFieldName;
-		if (fieldName == CENTER_FIELD_NAME){
-			rObj.center = get_center(poField, data, dataPos, dataSize);
-		} else if (fieldName == WIDTH_FIELD_NAME) {
-			poField->ExtractInstValue(NULL, 0, data, dataPos, dataSize, 'd', &fval);
-			rObj.width = fval;
-		} else if (fieldName == HEIGHT_FIELD_NAME) {
-			poField->ExtractInstValue(NULL, 0, data, dataPos, dataSize, 'd', &fval);
-			rObj.height = fval;
-		} else if (fieldName == ORIENTATION_FIELD_NAME) {
-			poField->ExtractInstValue(NULL, 0, data, dataPos, dataSize, 'd', &fval);
-			rObj.orientation = fval;
-		}
-
-		int nInstBytes = poField->GetInstBytes(data);
-		data += nInstBytes;
-		dataPos += nInstBytes;
-		dataSize -= nInstBytes;
-		iField++;	
-	}
-	
-	return rObj;
-}
-
 
 int main (int argc, char* argv[]) {
 	const char *file_name = NULL;
@@ -196,17 +135,18 @@ int main (int argc, char* argv[]) {
 	}
 
 	root = hHFA-> poRoot;
-	cout << "---tree display---" << endl;
-	display(root);
+	//cout << "---tree display---" << endl;
+	//display(root);
+	
+	set<string> dtypes = {EANT_DTYPE_NAME, EANT_GROUP_DTYPE_NAME};
+	vector<HFAEntry*> eantElements = find(root, dtypes);
 
-	vector<HFAEntry*> nodes = find(root, "Rectangle2");
-	vector<HFAEntry*>::iterator nodes_it;
-	for (nodes_it = nodes.begin(); nodes_it!=nodes.end(); ++nodes_it) {
-		HFAEntry* n = *nodes_it;
-		n->LoadData();
-		rectangle r = get_rectangle(n);
-		display(r);
+	vector<HFAAnnotation*> annotations = processEant(eantElements);
+	vector<HFAAnnotation*>::iterator it;
+	for (it=annotations.begin(); it != annotations.end(); ++it) {
+		HFAAnnotation* annotation = *it;
+		cout << *annotation << endl;
 	}
-
+	
 	return 1;
 }
