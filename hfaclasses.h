@@ -23,15 +23,13 @@ class HFAGeom {
 		double* get_center() { return center; };
 		double get_orien() { return orientation; };
 		unordered_map<string, double> get_fieldValues () { return fieldValues; };
-		string* get_fieldNames()
-		{
-			static string fieldNames[] = {"center", "orientation"};
-			return fieldNames;
-		};
+
+		virtual string get_type () { return "bGeom"; };
 
 		virtual ostream &write(ostream& os) const { return os;}
 
 		friend ostream& operator<<(ostream& os, const HFAGeom& hg){
+			os.precision(10);
 			os << "ct: " << hg.center[0] << "," << hg.center[1] << " " << endl;
 			os << "or: " << hg.orientation << " " << endl;
 			return hg.write(os);
@@ -64,6 +62,7 @@ class HFAEllipse: public HFAGeom {
 			static string fieldNames[] = {"semiMajorAxis", "semiMinorAxis"};
 			return fieldNames;
 		}
+		string get_type () { return "ellipse"; };
 		ostream& write (ostream &os) const override{
 			os << "majx: " << semiMajorAxis << endl;
 			os << "minx: " << semiMinorAxis << endl;
@@ -93,6 +92,7 @@ class HFARectangle: public HFAGeom {
 		};
 		double get_width() { return width; };
 		double get_height() { return height; };
+		string get_type () { return "rectangle"; };
 		string * get_fieldNames()
 		{
 			static string fieldNames[] = {"width", "height"};

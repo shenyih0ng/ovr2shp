@@ -54,6 +54,7 @@ double* get_xyCoords (HFAField* xy, GByte* data, GInt32 dataPos, GInt32 dataSize
 HFAGeom::HFAGeom (HFAEntry* node) {
 	string CENTER_FIELD_NAME = "center";
 	string ORIGIN_FIELD_NAME = "origin"; // temp (for Text2 compatbility)
+	string ORIEN_FIELD_NAME = "orientation";
 
 	int iField = 0;
 	double fval;
@@ -71,7 +72,11 @@ HFAGeom::HFAGeom (HFAEntry* node) {
 			center = get_xyCoords(poField, data, dataPos, dataSize);	
 		} else if (poField->chItemType == 'd') {
 			poField->ExtractInstValue(NULL, 0, data, dataPos, dataSize, 'd', &fval);
-			fieldValues.insert(make_pair<string, double>(fieldName, (double)fval));	
+			if (fieldName == ORIEN_FIELD_NAME) {
+				orientation = (double)fval;
+			} else {
+				fieldValues.insert(make_pair<string, double>(fieldName, (double)fval));	
+			}
 		}
 		int nInstBytes = poField->GetInstBytes(data);
 		data += nInstBytes;
@@ -123,6 +128,7 @@ HFAAnnotation::HFAAnnotation(HFAEntry* node) {
  * Insertion operator overloading for HFAAnnotation display
  */
 ostream& operator <<(ostream& os, const HFAAnnotation& ha) {
+	os << "gtype: " << ha.geom->get_type() << endl;
 	os << "n: " << ha.name << " [" << ha.description << "]" << endl;
 	os << *ha.geom << " ";
 
