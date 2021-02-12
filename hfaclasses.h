@@ -1,3 +1,4 @@
+#include <vector>
 #include <iostream>
 #include <unordered_map>
 
@@ -20,13 +21,20 @@ class HFAGeom {
 	unordered_map<string, double> fieldValues;
 	public:
 		HFAGeom (HFAEntry*);
-		double* get_center() { return center; };
-		double get_orien() { return orientation; };
+		double* get_center() const { return center; };
+		double get_orien() const { return orientation; };
 		unordered_map<string, double> get_fieldValues () { return fieldValues; };
 
 		virtual string get_type () { return "bGeom"; };
 
 		virtual ostream &write(ostream& os) const { return os;}
+
+		virtual vector<pair<double, double>> get_pts() const {
+			vector<pair<double, double>> pts;
+			pts.push_back(make_pair(center[0], center[1]));
+
+			return pts;
+		};
 
 		friend ostream& operator<<(ostream& os, const HFAGeom& hg){
 			os.precision(10);
@@ -80,6 +88,9 @@ class HFAEllipse: public HFAGeom {
 class HFARectangle: public HFAGeom {
 	double width;
 	double height;
+	
+	vector<pair<double, double>> get_unorientated_pts() const;
+
 	public:
 		HFARectangle (HFAEntry* node):HFAGeom(node){
 			unordered_map<string, double> fvalues = HFAGeom::get_fieldValues();
@@ -90,6 +101,10 @@ class HFARectangle: public HFAGeom {
 				else if (fname == "height") { height=fvalues.at(fname); }
 			}
 		};
+		
+		// Returns the orientated pts	
+		vector<pair<double, double>> get_pts() const;
+
 		double get_width() { return width; };
 		double get_height() { return height; };
 		string get_type () { return "rectangle"; };
@@ -98,9 +113,16 @@ class HFARectangle: public HFAGeom {
 			static string fieldNames[] = {"width", "height"};
 			return fieldNames;
 		}
+
 		ostream& write (ostream &os) const override{
 			os << "width: " << width << " " << endl;
 			os << "height: " << height << " " << endl;
+			vector<pair<double, double>> pts = get_pts();
+			vector<pair<double, double>>::iterator it;
+			for (it = pts.begin(); it != pts.end(); ++it) {
+				pair<double, double> pt = *it;
+				os << "(" << pt.first << ", " << pt.second << ")" << endl;		
+			}
 
 			return os;
 		}

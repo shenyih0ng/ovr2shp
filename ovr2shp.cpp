@@ -1,8 +1,11 @@
 #include <set>
+#include <cmath>
 #include <vector>
 #include <stdio.h>
 #include "hfa_p.h"
 #include "hfaclasses.h"
+
+#include "gnuplot-iostream.h"
 
 using namespace std;
 
@@ -29,14 +32,63 @@ const unordered_map<string, HFAGeomFactory*> hfaGeomFactories = {
  * Tree view of HFA structure
  * - displays the name, dtype and size of HFA nodes
  *
- * @para node 	HFAEntry* start node
- * @para nIdent	int	  indentation prefix
+ * @param node 		HFAEntry* start node
+ * @param nIdent	int	  indentation prefix
  * */
 void display (HFAEntry* node, int nIdent=0) {
 	for (int i=0; i < nIdent; i++) {cout << "\t";}
 	printf("%s<%s> %d\n", node->GetName(), node->GetType(), node->GetDataSize());
 	if (node->GetChild() != NULL) {display(node->GetChild(), nIdent+1);}
 	if (node->GetNext() != NULL) {display(node->GetNext(), nIdent);}
+}
+
+/*
+ * Helper sort functions for plotting
+ *
+ */
+bool sortx(pair<double, double> i, pair<double, double> j) {
+	return i.first < j.first;
+}
+
+bool sorty(pair<double, double> i, pair<double, double> j) {
+	return i.second < j.second;
+}
+
+/*
+ * plot[utility]
+ *
+ * Plot HFAAAnnotations geometry/shapes using Gnuplot
+ * 
+ * @param annotations 	vector<HFAAnnotation*> vector of HFAAnnotation objects
+ * @param buffer	"zoom"
+ */
+void plot (vector<HFAAnnotation*> annotations, int buffer=1) {
+	Gnuplot g;
+	string cmd = "plot";
+
+	vector<pair<double, double>> combined;
+	vector<HFAAnnotation*>::iterator it;
+	for (it = annotations.begin(); it != annotations.end(); ++it) {
+		vector<pair<double, double>> pts = (*it)->get_geom()->get_pts();
+		combined.insert(combined.end(), pts.begin(), pts.end());
+		if (pts.size() == 1) {
+			cmd += g.file1d(pts) + "with circles title '" + (*it)->get_name() + "', \\\n";
+		} else {
+			cmd += g.file1d(pts) + "with lines title '" + (*it)->get_name() + "', \\\n";
+		}
+	}
+
+	double xmin, xmax, ymin, ymax;
+	sort(combined.begin(), combined.end(), sortx);
+	xmin = combined.begin()->first;
+	xmax = (combined.end()-1)->first;
+	sort(combined.begin(), combined.end(), sorty);
+	ymin = combined.begin()->second;
+	ymax = (combined.end()-1)->second;
+
+	g << "set xrange[" << xmin - (xmax-xmin)*buffer << ":" << xmax + (xmax-xmin)*buffer << "]\n";
+	g << "set yrange[" << ymin - (ymax-ymin)*buffer << ":" << ymax + (ymax-ymin)*buffer << "]\n";
+	g << cmd << endl;	
 }
 
 /*
@@ -84,6 +136,7 @@ vector<HFAEntry*> find (HFAEntry* node, string dtype_name) {
 	set<string> dtype = {dtype_name};
 	return find(node, dtype);
 }
+
 /*
  * processEant
  *
@@ -121,7 +174,9 @@ vector<HFAAnnotation*> processEant (vector<HFAEntry*> eantElements) {
 
 int main (int argc, char* argv[]) {
 	bool displayTree = false;
+	bool plotAnno = false;
 	const string displayFlag = "-d"; //temp
+	const string plotFlag = "-p"; //temp
 
 	const char *file_name = NULL;
 	HFAHandle hHFA;
@@ -130,6 +185,8 @@ int main (int argc, char* argv[]) {
 	for (int i = 1; i < argc; i++){
 		if (argv[i] == displayFlag) {
 			displayTree = true;
+		} else if (argv[i] == plotFlag) {
+			plotAnno = true;
 		} else if (file_name == NULL) {
 			file_name = argv[i];
 		}
@@ -162,6 +219,10 @@ int main (int argc, char* argv[]) {
 		HFAAnnotation* annotation = *it;
 		cout << *annotation << endl;
 	}
+
+	if (plotAnno) {
+		plot(annotations);
+	}	
 	
 	return 1;
 }

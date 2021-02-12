@@ -1,3 +1,4 @@
+#include <math.h>
 #include "hfa_p.h"
 #include "hfaclasses.h"
 
@@ -39,6 +40,24 @@ double* get_xyCoords (HFAField* xy, GByte* data, GInt32 dataPos, GInt32 dataSize
 	coordY->ExtractInstValue(NULL, 0, data, dataPos, dataSize, 'd', &xyCoords[1]);
 
 	return xyCoords;
+}
+
+/*
+ * rotate [utility]
+ *
+ * rotate clockwise a (x, y) vector by a specified rad angle
+ *
+ * @param coord	pair<double, double> vector coordinates
+ * @param rad   double  rotation angle
+ *
+ * @return pair<double, double> rotated vector coordinates
+ */
+pair<double, double> rotate (pair<double, double> coord,  double rad) {
+	double costheta = cos(rad);
+	double sintheta = sin(rad);
+
+	return make_pair(costheta*coord.first + sintheta*coord.second, 
+			costheta*coord.second - sintheta*coord.first);
 }
 
 /*
@@ -84,6 +103,65 @@ HFAGeom::HFAGeom (HFAEntry* node) {
 		dataSize -= nInstBytes;
 		iField++;	
 	}
+}
+
+/*
+ * HFARectangle
+ *
+ * get_unorientated_points
+ * - get the 4 unorientated corners of the rectangle
+ * - follows LinearRing coordinate standard (first and last coordinates are the same)
+ *
+ * @return vector<pair<double, double>> four unorientated corners
+ */
+vector<pair<double, double>> HFARectangle::get_unorientated_pts() const {
+	vector<pair<double, double>> pts;
+	double* center = get_center();
+	int ydir[2] = {1, -1};
+	int xdir[2] = {-1, 1};
+	for (int i = 0; i <= 1; i++) {
+		for (int j = 0; j <= 1; j++) {
+		 	pts.push_back(make_pair(
+				center[0] + (xdir[j]*(width/2)), 
+				center[1] + (ydir[i]*(height/2))));
+		}
+		int temp = xdir[1];
+		xdir[1] = xdir[0];
+		xdir[0] = temp;
+	}
+	pts.push_back(pts[0]);
+	return pts;	
+}
+
+template <typename T, typename U>
+pair<T,U> operator-(const pair<T,U>& l, double* r) {
+	return {l.first - r[0], l.second - r[1]};
+}
+
+template <typename T, typename U>
+pair<T,U> operator+(const pair<T,U>& l, double* r) {
+	return {l.first + r[0], l.second + r[1]};
+}
+
+/*
+ * HFARectangle
+ *
+ * get_pts
+ * - get the 4 orientated corners of the rectangle
+ *
+ * @return vector<pair<double, double>> four orientated corners
+ */
+vector<pair<double, double>> HFARectangle::get_pts() const {
+	double* center = get_center();
+	double orientation = get_orien();
+	vector<pair<double, double>> orientated;
+	vector<pair<double, double>> unorientated = get_unorientated_pts();
+	vector<pair<double, double>>::iterator it;
+	for (it = unorientated.begin(); it != unorientated.end(); it++) {
+		pair<double, double> vect_coord = rotate(*it - center, orientation) + center;
+		orientated.push_back(vect_coord);
+	}
+	return orientated;
 }
 
 /*
