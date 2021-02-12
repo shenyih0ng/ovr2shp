@@ -4,7 +4,7 @@ A project that helps convert ERDAS HFA Annotation Layer (`.ovr`) to Shapefile(`.
 
 ERDAS also provided a detailed documentation explaining the internals of HFA structure. Although it details mainly on the raster `.img` format, `.ovr` follows the same file structure described in the documentation.
 
-[gnuplot]() is used to visualize the geometries/shape extracted from  `.ovr` files. [Gnuplot-Iostream Interface]() is used to interface with the `gnuplot` binary.
+[gnuplot](http://www.gnuplot.info/) is used to visualize the geometries/shape extracted from  `.ovr` files. [Gnuplot-Iostream Interface](https://github.com/dstahlke/gnuplot-iostream) is used to interface with the `gnuplot` binary.
 
 ## TODOS
 
