@@ -1,8 +1,20 @@
+#include <set>
 #include <math.h>
-#include "hfa_p.h"
+#include "ogrsf_frmts.h"
+#include "hfa_p_wo_port.h"
 #include "hfaclasses.h"
 
 using namespace std;
+const string EANT_DTYPE_NAME = "Element_Eant";
+const string EANT_GROUP_DTYPE_NAME = "Element_2_Eant";
+
+const string ELLI_DTYPE_NAME = "Eant_Ellipse";
+const string RECT_DTYPE_NAME = "Rectangle2";
+
+const unordered_map<string, HFAGeomFactory*> hfaGeomFactories = {
+        {ELLI_DTYPE_NAME, new HFAEllipseFactory()},
+        {RECT_DTYPE_NAME, new HFARectangleFactory()}
+};
 
 /* 
  * get_xyCoords [utility]
@@ -58,6 +70,52 @@ pair<double, double> rotate (pair<double, double> coord,  double rad) {
 
 	return make_pair(costheta*coord.first + sintheta*coord.second, 
 			costheta*coord.second - sintheta*coord.first);
+}
+
+/*
+ * find [utility]
+ *
+ * Retrieve HFA nodes of specified type using recursive search
+ *
+ * @param node 	HFAEntry* start node
+ * @param dtype_names set specified types
+ *
+ * @return vector<HFAEntry*> collection of HFAEntry of specified type
+ *
+ */
+vector<HFAEntry*> find (HFAEntry* node, set<string> dtype_names) {
+	vector<HFAEntry*> nodes_found;
+	vector<HFAEntry*> to_search;
+	to_search.push_back(node);
+	while(!to_search.empty()) {
+		HFAEntry* curr_node = to_search.back();
+		to_search.pop_back();
+		if(dtype_names.find(curr_node->GetType()) != dtype_names.end()) {
+			nodes_found.push_back(curr_node);
+		}
+		if (curr_node->GetNext() != NULL) {
+			to_search.push_back(curr_node->GetNext());
+		}
+		if (curr_node->GetChild() != NULL) {
+			to_search.push_back(curr_node->GetChild());
+		}
+	}
+
+	return nodes_found;
+}
+
+/*
+ * find[utility]
+ *
+ * Overloaded
+ *
+ * @param node HFAEntry* start node
+ * @param dtype_name string specified type
+ *
+ */
+vector<HFAEntry*> find (HFAEntry* node, string dtype_name) {
+	set<string> dtype = {dtype_name};
+	return find(node, dtype);
 }
 
 /*
@@ -200,15 +258,40 @@ HFAAnnotation::HFAAnnotation(HFAEntry* node) {
 	}
 }
 
-/* 
- * HFAAnnotation
+/*
+ * HFAAnnotationLayer()
  *
- * Insertion operator overloading for HFAAnnotation display
+ * Constructs an HFAAnnotationLayer from HFAHandle
+ *
+ * @param handle   HFAHandle HFA File Handle
  */
-ostream& operator <<(ostream& os, const HFAAnnotation& ha) {
-	os << "gtype: " << ha.geom->get_type() << endl;
-	os << "n: " << ha.name << " [" << ha.description << "]" << endl;
-	os << *ha.geom << " ";
+HFAAnnotationLayer::HFAAnnotationLayer(HFAHandle handle) {
+	hHFA = handle;
+	root = hHFA->poRoot;	
+	set<string> dtypes = {EANT_DTYPE_NAME, EANT_GROUP_DTYPE_NAME};
+	
+	// add annotations
+	vector<HFAEntry*> eantElements = find(root, dtypes);
+	vector<HFAEntry*>::iterator it;
 
-	return os;	
+	for (it=eantElements.begin(); it != eantElements.end(); ++it) {
+		HFAEntry* eantElement = *it;
+		if (eantElement->GetChild() != NULL) {
+			const char* cType = eantElement->GetChild()->GetType();
+			unordered_map<string, HFAGeomFactory*>::const_iterator gIt = hfaGeomFactories.find(cType);
+			if (gIt != hfaGeomFactories.end()) {
+				eantElement->LoadData();
+				HFAAnnotation* hfaA = new HFAAnnotation(eantElement);
+				HFAEntry* child = eantElement->GetChild();
+				child->LoadData();
+
+				HFAGeom* annoGeom;
+				HFAGeomFactory* factory = gIt->second;
+				annoGeom = factory->create(child);
+				hfaA->set_geom(annoGeom);
+
+				add_anno(hfaA); // add to layer
+			}
+		}
+	}		
 }

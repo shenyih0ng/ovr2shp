@@ -6,11 +6,9 @@ ERDAS also provided a detailed documentation explaining the internals of HFA str
 
 [gnuplot](http://www.gnuplot.info/) is used to visualize the geometries/shape extracted from  `.ovr` files. [Gnuplot-Iostream Interface](https://github.com/dstahlke/gnuplot-iostream) is used to interface with the `gnuplot` binary.
 
-## TODOS
+## Notes
 
-- [ ] Extract coordinate reference system if exist
-
-- [ ] Shapefile+GeoJSON creation
+- `hfa_p_wo_port.h` is exactly the same as `hfa_p` found in `./hfa` with the exception that it does not include `cpl_*.h`. This is because GDAL has been added as a dependency of the project, thus all **Common Portability Library** headers is already included when GDAL headers are included.
 
 ### References
 

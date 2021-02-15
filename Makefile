@@ -1,9 +1,12 @@
+GDAL_ROOT = $(HOME)/Desktop/gdal
+BOOST_LIB = /usr/local/lib
+
 build: compile
-	g++ ovr2shp.o hfaclasses.o ./hfa/*.o ./port/*.o -lm -lpthread -L/usr/local/lib -lboost_iostreams -lboost_system -lboost_filesystem -o ovr2shp
+	g++ ovr2shp.o hfaclasses.o ./hfa/*.o -L$(BOOST_LIB) -L$(GDAL_ROOT)/lib -lm -lpthread -lboost_iostreams -lboost_system -lboost_filesystem -lgdal -o ovr2shp
 
 compile: ovr2shp.cpp hfaclasses.cpp
-	g++ -c -O -I./hfa -I./port hfaclasses.cpp
-	g++ -c -O -I./hfa -I./port -std=c++17 -L/usr/local/lib -lboost_iostreams -lboost_system -lboost_filesystem ovr2shp.cpp
+	g++ -c -O -I./hfa -I$(GDAL_ROOT)/include hfaclasses.cpp
+	g++ -c -O -I./hfa -I$(GDAL_ROOT)/include -std=c++17 ovr2shp.cpp
 
 build_dep:
 	./build_dep.sh

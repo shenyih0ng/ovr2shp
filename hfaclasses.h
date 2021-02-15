@@ -1,4 +1,5 @@
 #include <vector>
+#include <stdio.h>
 #include <iostream>
 #include <unordered_map>
 
@@ -146,7 +147,77 @@ class HFAAnnotation {
 		char* get_desc() { return description; };
 		HFAGeom* get_geom() { return geom; };
 		void set_geom(HFAGeom* g) { geom=g; };
-		friend ostream& operator<<(ostream&, const HFAAnnotation&);
+		friend ostream& operator<<(ostream& os, const HFAAnnotation& ha) {
+			os << "gtype: " << ha.geom->get_type() << endl;
+			os << "n: " << ha.name << " [" << ha.description << "]" << endl;
+			os << *ha.geom << " ";
+
+			return os;	
+		}
+};
+
+/*
+ * HFAAnnotationLayer
+ *
+ * Extract essential information within an ERDAS Annotation Layer from HFA File Handle & HFA Root node
+ * - Projection
+ * - Annotations
+ *
+ */
+class HFAAnnotationLayer {
+	HFAHandle hHFA;
+	HFAEntry* root;
+
+	OGRSpatialReference srs;
+	vector<HFAAnnotation*> annotations;
+
+	/*
+	 * display [utility]
+	 *
+	 * Tree view of HFA structure
+	 * - displays the name, dtype and size of HFA nodes
+	 *
+	 * @param node 		HFAEntry* start node
+	 * @param nIdent	int	  indentation prefix
+	 * */
+	void display_HFATree(HFAEntry* node, int nIdent=0) {
+		for (int i=0; i < nIdent; i++) {cout << "\t";}
+		printf("%s<%s> %d\n", node->GetName(), node->GetType(), node->GetDataSize());
+		if (node->GetChild() != NULL) {display_HFATree(node->GetChild(), nIdent+1);}
+		if (node->GetNext() != NULL) {display_HFATree(node->GetNext(), nIdent);}
+	}
+
+	public:
+		HFAAnnotationLayer (HFAHandle);
+
+		OGRSpatialReference get_srs () { return srs; };
+
+		void set_srs (OGRSpatialReference new_srs) { srs = new_srs; };
+		
+		vector<HFAAnnotation*> get_annos () const { return annotations; }
+
+		void add_anno (HFAAnnotation* anno) { 
+			annotations.push_back(anno); 
+		};
+
+		bool is_empty() { return annotations.empty(); }
+
+		int get_num_annos() { return annotations.size(); }
+
+		void printTree () { display_HFATree(root); }
+
+		friend ostream& operator<<(ostream& os, const HFAAnnotationLayer& hal) {
+			//TODO display srs
+			vector<HFAAnnotation*> annos = hal.get_annos();
+			vector<HFAAnnotation*>::const_iterator it;
+			cout << "num_annos: " << annos.size() << endl;
+			for (it = annos.begin(); it != annos.end(); ++it) {
+				HFAAnnotation* anno = *it;
+				os << *anno << endl;
+			}
+
+			return os;	
+		}
 };
 
 
