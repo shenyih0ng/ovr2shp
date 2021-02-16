@@ -3,7 +3,18 @@
 #include <iostream>
 #include <unordered_map>
 
+#define GDAL_INCLUDED
+#include "ogrsf_frmts.h" // GDAL vector drivers
+#include "hfa_p.h"
+
 using namespace std;
+
+/*
+ * Prototypes
+ *
+ */
+
+bool extract_proj (HFAHandle hHFA, OGRSpatialReference& srs);
 
 /*
  * HFAGeom
@@ -27,6 +38,11 @@ class HFAGeom {
 		unordered_map<string, double> get_fieldValues () { return fieldValues; };
 
 		virtual string get_type () { return "bGeom"; };
+
+		virtual string to_wkt () { 
+			// TODO
+			return ""; 
+		};
 
 		virtual ostream &write(ostream& os) const { return os;}
 
@@ -71,6 +87,12 @@ class HFAEllipse: public HFAGeom {
 			static string fieldNames[] = {"semiMajorAxis", "semiMinorAxis"};
 			return fieldNames;
 		}
+		
+		string to_wkt() { 
+			//TODO
+			return ""; 
+		};
+
 		string get_type () { return "ellipse"; };
 		ostream& write (ostream &os) const override{
 			os << "majx: " << semiMajorAxis << endl;
@@ -105,6 +127,8 @@ class HFARectangle: public HFAGeom {
 		
 		// Returns the orientated pts	
 		vector<pair<double, double>> get_pts() const;
+		
+		string to_wkt ();
 
 		double get_width() { return width; };
 		double get_height() { return height; };
@@ -144,9 +168,13 @@ class HFAAnnotation {
 	public:
 		HFAAnnotation (HFAEntry*);
 		char* get_name() { return name; };
+
 		char* get_desc() { return description; };
+
 		HFAGeom* get_geom() { return geom; };
+
 		void set_geom(HFAGeom* g) { geom=g; };
+
 		friend ostream& operator<<(ostream& os, const HFAAnnotation& ha) {
 			os << "gtype: " << ha.geom->get_type() << endl;
 			os << "n: " << ha.name << " [" << ha.description << "]" << endl;
@@ -167,9 +195,12 @@ class HFAAnnotation {
 class HFAAnnotationLayer {
 	HFAHandle hHFA;
 	HFAEntry* root;
-
+	
+	bool hasSRS = false;
 	OGRSpatialReference srs;
 	vector<HFAAnnotation*> annotations;
+
+	GDALDataset *gdalDs;
 
 	/*
 	 * display [utility]
@@ -187,12 +218,22 @@ class HFAAnnotationLayer {
 		if (node->GetNext() != NULL) {display_HFATree(node->GetNext(), nIdent);}
 	}
 
+	void write_to_shp (const char*, char*);
+
 	public:
 		HFAAnnotationLayer (HFAHandle);
 
 		OGRSpatialReference get_srs () { return srs; };
 
-		void set_srs (OGRSpatialReference new_srs) { srs = new_srs; };
+		void set_srs (OGRSpatialReference new_srs) { 
+			hasSRS = true;
+			srs = new_srs; 
+		};
+
+		void set_srs (char* proj4srs) {
+			hasSRS = true;
+			srs.importFromProj4(proj4srs);	
+		};
 		
 		vector<HFAAnnotation*> get_annos () const { return annotations; }
 
@@ -204,10 +245,28 @@ class HFAAnnotationLayer {
 
 		int get_num_annos() { return annotations.size(); }
 
+		void to_shp (char* ofilename) {
+			const char* shpDriverName = "ESRI Shapefile";
+			write_to_shp(shpDriverName, ofilename);	
+		};
+
+		void to_gjson (char* ofilename) {
+			//TODO GeoJSONs have a different write process compared to shapefiles
+			const char* gjsonDriverName = "GeoJSON";
+			cerr << "GeoJSON is not supported yet!" << endl;
+		};
+
 		void printTree () { display_HFATree(root); }
 
 		friend ostream& operator<<(ostream& os, const HFAAnnotationLayer& hal) {
-			//TODO display srs
+			if (hal.hasSRS) {
+				const char* srsDisplayOptions[] = {"FORMAT=WKT2_2018", "MULTILINE=YES", nullptr};
+				char* wkt = nullptr;
+				hal.srs.exportToWkt(&wkt, srsDisplayOptions);	
+				os << wkt << endl;
+				CPLFree(wkt);
+			}
+
 			vector<HFAAnnotation*> annos = hal.get_annos();
 			vector<HFAAnnotation*>::const_iterator it;
 			cout << "num_annos: " << annos.size() << endl;

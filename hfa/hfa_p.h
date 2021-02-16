@@ -113,9 +113,11 @@
 #ifndef _HFA_P_H_INCLUDED
 #define _HFA_P_H_INCLUDED
 
+#ifndef GDAL_INCLUDED 
 #include "cpl_port.h"
 #include "cpl_error.h"
 #include "cpl_vsi.h"
+#endif
 
 #ifdef CPL_LSB
 #  define HFAStandard(n,p)	{}

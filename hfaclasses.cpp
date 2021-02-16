@@ -1,10 +1,10 @@
 #include <set>
 #include <math.h>
-#include "ogrsf_frmts.h"
-#include "hfa_p_wo_port.h"
-#include "hfaclasses.h"
+
+#include "ovr2shp.h"
 
 using namespace std;
+
 const string EANT_DTYPE_NAME = "Element_Eant";
 const string EANT_GROUP_DTYPE_NAME = "Element_2_Eant";
 
@@ -223,6 +223,31 @@ vector<pair<double, double>> HFARectangle::get_pts() const {
 }
 
 /*
+ * HFARectangle
+ *
+ * to_wkt
+ * - Construct wkt (well-known text) from orientated points of HFARectangle
+ *
+ * @return string  polygon wkt of HFARectangle
+ */
+string HFARectangle::to_wkt() {
+	string wkt = "POLYGON ((";
+	vector<pair<double, double>> pts = get_pts();
+	vector<pair<double, double>>::const_iterator it;
+	for (it = pts.begin(); it != pts.end(); ++it) {
+		pair<double, double> pt = *it;
+		if (it == pts.end() -1) {
+			wkt += to_string(pt.first) + " " + to_string(pt.second);
+			wkt += "))";
+		} else {
+			wkt += to_string(pt.first) + " " + to_string(pt.second) + ", ";
+		}
+	}
+
+	return wkt;
+}
+
+/*
  * HFAAnnotation()
  *
  * Constructs an HFAAnnotation from HFAEntry
@@ -267,6 +292,13 @@ HFAAnnotation::HFAAnnotation(HFAEntry* node) {
  */
 HFAAnnotationLayer::HFAAnnotationLayer(HFAHandle handle) {
 	hHFA = handle;
+
+	// extract projection/crs
+	hasSRS = extract_proj(hHFA, srs);
+	if (!hasSRS) {
+		cerr << "[warn] no map info found/unsupported projections in file" << endl;
+	}
+
 	root = hHFA->poRoot;	
 	set<string> dtypes = {EANT_DTYPE_NAME, EANT_GROUP_DTYPE_NAME};
 	
@@ -294,4 +326,75 @@ HFAAnnotationLayer::HFAAnnotationLayer(HFAHandle handle) {
 			}
 		}
 	}		
+}
+
+
+/*
+ * HFAAnnotationLayer
+ *
+ * write_to_shp
+ * - write/export HFAAnnotationLayer to ShapeFile (.shp)
+ *
+ * Caveats
+ * - Currently only supports OGRPolygon & Polygon wkts
+ * - Setting the layer name does not work expected (layer name turns out to be the base name of the output file name/path)
+ * - Field width will be truncated to 254 when set to 256 (i guess the max field width is 254)  
+ *
+ * @param driverName	const char* 	GDAL vector driver name
+ * @param ofilename	string		Output file name/path
+ */
+void HFAAnnotationLayer::write_to_shp (const char* driverName, char* ofilename) {
+	GDALDriver* driver = GetGDALDriverManager()->GetDriverByName(driverName);
+	if (driver == NULL) {
+		cout << driverName << " driver not found" << endl;
+		exit(1);
+	}
+
+	OGRLayer* layer;
+	gdalDs = driver->Create(ofilename, 0, 0, 0, GDT_Unknown, NULL);
+	
+	if (hasSRS) {
+		layer = gdalDs->CreateLayer(NULL, new OGRSpatialReference(get_srs()), wkbPolygon, NULL);
+	} else {
+		layer = gdalDs->CreateLayer(NULL, NULL, wkbPolygon, NULL);
+	}
+	
+	OGRFieldDefn nameField("name", OFTString);
+	nameField.SetWidth(254);
+	if (layer->CreateField(&nameField) != OGRERR_NONE) {
+		cout << "failed creating name field" << endl;
+		exit(1);
+	}
+
+	OGRFieldDefn descField("desc", OFTString);
+	descField.SetWidth(254);
+	if (layer->CreateField(&descField) != OGRERR_NONE) {
+		cout << "failed creating description field" << endl;
+		exit(1);
+	}
+
+	vector<HFAAnnotation*> annotations = get_annos();	
+	vector<HFAAnnotation*>::const_iterator it;
+	for (it = annotations.begin(); it != annotations.end(); ++it) {
+		OGRFeature* feat;
+		OGRPolygon polygon;
+
+		feat = OGRFeature::CreateFeature(layer->GetLayerDefn());
+		feat->SetField("name", (*it)->get_name());
+		feat->SetField("desc", (*it)->get_desc());
+
+		HFAGeom* hfaGeom = (*it)->get_geom();
+		string wktStr = hfaGeom->to_wkt();
+		const char* wkt = wktStr.c_str();
+		polygon.importFromWkt(&wkt);
+		feat->SetGeometry(&polygon);
+
+		if (layer->CreateFeature(feat) != OGRERR_NONE) {
+			cout << "failed to create feature" << endl;
+		}
+
+		OGRFeature::DestroyFeature(feat);
+	}
+
+	GDALClose(gdalDs);	
 }

@@ -1,19 +1,10 @@
 #include <cmath>
 #include <vector>
 
-#include "ogrsf_frmts.h"
-#include "hfa_p_wo_port.h"
-#include "hfaclasses.h"
-
-#include "gnuplot-iostream.h"
+#include "ovr2shp.h"
+#include "gnuplot-iostream.h" // gnuplot
 
 using namespace std;
-
-/*
- * Goal: Convert .ovr to .shp/.geojson
- * 2. Extract coordinate system of annotation (if there is one)
- * 3. Parse it into a .shp/.geojson format
- */
 
 /*
  * Helper sort functions for plotting
@@ -64,14 +55,21 @@ void plot (vector<HFAAnnotation*> annotations, int buffer=1) {
 	g << cmd << endl;	
 }
 
-
 int main (int argc, char* argv[]) {
 	bool displayTree = false;
 	bool plotAnno = false;
+	bool userDefinedSRS = false;
+	bool writeOutput = false;
+
 	const string displayTreeFlag = "-d"; //temp
 	const string plotFlag = "-p"; //temp
+	const string srsFlag = "-srs"; // temp
+	const string outputFlag = "-o"; //temp
 
-	const char *file_name = NULL;
+	char* user_srs = NULL; //proj4
+	char* output_file_name = NULL;
+	const char* file_name = NULL;
+
 	HFAHandle hHFA;
 	
 	for (int i = 1; i < argc; i++){
@@ -79,6 +77,14 @@ int main (int argc, char* argv[]) {
 			displayTree = true;
 		} else if (argv[i] == plotFlag) {
 			plotAnno = true;
+		} else if (argv[i] == srsFlag) {
+			userDefinedSRS = true;
+			i++;
+			user_srs = argv[i];
+		} else if (argv[i] == outputFlag) {
+			writeOutput = true;
+			i++;
+			output_file_name = argv[i];
 		} else if (file_name == NULL) {
 			file_name = argv[i];
 		}
@@ -97,12 +103,33 @@ int main (int argc, char* argv[]) {
 	}
 
 	HFAAnnotationLayer* hfaal = new HFAAnnotationLayer(hHFA);
+	
+	// Inject user defined SRS (overwrites native projection in file)
+	if (userDefinedSRS) {
+		hfaal->set_srs(user_srs);
+	}
+	
 	cout << *hfaal << endl;
 	
-	if (displayTree) {
-		hfaal->printTree();
-	}
+	// Write to output file
+	if (writeOutput) {
+		GDALAllRegister(); // register all drivers
 
+		string ofilename (output_file_name);
+		string file_ext = ofilename.substr(ofilename.find_last_of(".") + 1) ;
+		if (file_ext == "shp") {
+			hfaal->to_shp(output_file_name);
+		} else if (file_ext == "geojson") {
+			hfaal->to_gjson(output_file_name);
+		}
+	}
+	
+	// Display HFA Tree Structure	
+	if (displayTree) { 
+		hfaal->printTree(); 
+	}
+	
+	// Plot annotation geometries/shapes
 	if (plotAnno) {
 		vector<HFAAnnotation*> annotations = hfaal->get_annos();
 		plot(annotations);
