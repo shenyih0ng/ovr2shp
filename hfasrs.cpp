@@ -2,6 +2,8 @@
 
 using namespace std;
 
+// TODO extract MapInfo, Projection
+
 /*
  * extract_proj
  *
@@ -25,7 +27,7 @@ bool extract_proj (HFAHandle hHFA, OGRSpatialReference& srs) {
 	mapInfo = HFAGetMapInfo(hHFA);
 	projectionParams = HFAGetProParameters(hHFA);
 	datum = HFAGetDatum(hHFA);
-	
+
 	if (mapInfo == NULL || projectionParams == NULL) {
 		// no map information present
 		return false;
