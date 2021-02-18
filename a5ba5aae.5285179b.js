@@ -1,0 +1,1 @@
+(window.webpackJsonp=window.webpackJsonp||[]).push([[8],{78:function(s){s.exports=JSON.parse('{"title":"Recent posts","items":[{"title":"What is HFA?","permalink":"/ovr2shp/blog/what-is-hfa"}]}')}}]);
