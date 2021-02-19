@@ -207,59 +207,38 @@ class HFAAnnotationLayer {
 	 *
 	 * Tree view of HFA structure
 	 * - displays the name, dtype and size of HFA nodes
+	 * - seg fault occurs when trying to recursively display StyleLibrary //TODO
 	 *
 	 * @param node 		HFAEntry* start node
 	 * @param nIdent	int	  indentation prefix
 	 * */
-	void display_HFATree(HFAEntry* node, int nIdent=0) {
-		//TODO i have no idea why there is a segmentation fault for LineStyle_0 (hypothesis: something to with the number of fields + when offsetting memory space it leads to a seg fault) the error differs from file to file (its probably time to look into some error handling)
-		string _avoid = "LineStyle_0";
+	void display_HFATree(HFAEntry* node, int nIdent) {
+		string _avoid = "StyleLibrary";
+		bool avoid = (node->GetName() == _avoid);
 
-		for (int i=0; i < nIdent; i++) {cout << "\t";}
-		printf("%s<%s> %d \n", node->GetName(), node->GetType(), node->GetDataSize());
-
-		if (node->GetName() != _avoid) {
-			node->LoadData();	
-			HFAType* ntype = node->GetPoType();	
-			HFAField* poField;
-			GByte* data = node->GetData();
-			GInt32 dataPos = node->GetDataPos();
-			GInt32 dataSize = node->GetDataSize();
-
-			if (ntype != NULL) {	
-				int iField=0;
-				while (iField < ntype->nFields) {
-					poField = ntype->papoFields[iField];
-				
-					for (int i=0; i < nIdent + 1; i++) {cout << "\t";}
-					printf("+ %s<%c>\n", poField->pszFieldName , poField->chItemType); // display field names;
-					
-					int nInstBytes = poField->GetInstBytes(data);
-					data += nInstBytes;
-					dataPos += nInstBytes;
-					dataSize -= nInstBytes;
-					iField++;
-				}
-			}
+		static char indentSpaces[128];
+		for (int i = 0; i < nIdent; i++) {
+			indentSpaces[i] = ' ';
 		}
-		
-		//temp
-		string mapinfo = "Map_Info";
-		if (node->GetName() == mapinfo) {
-			for (int i=0; i < nIdent + 1; i++) {cout << "\t";}
-			cout << "projName: " << node->GetStringField("proName") << " ";
+		indentSpaces[nIdent] = '\0';
 
-			cout << "ulx: " << node->GetDoubleField("upperLeftCenter.x") << " ";
-			cout << "uly: " << node->GetDoubleField("upperLeftCenter.y") << " ";
+		fprintf( stdout, "%s%s(%s) @ %d + %d @ %d\n", indentSpaces,
+			     node->GetName(), node->GetType(),
+			     node->GetFilePos(),
+			     node->GetDataSize(), node->GetDataPos() );
 
-			cout << "lrx: " << node->GetDoubleField("lowerRightCenter.x") << " ";
-			cout << "lry: " << node->GetDoubleField("lowerRightCenter.y") << " ";
-
-			cout << "psizeW: " << node->GetDoubleField("pixelSize.width") << " ";
-			cout << "psizeH: " << node->GetDoubleField("pixelSize.height") << endl;
+		if (avoid) {
+			fprintf(stdout, "%s__omitted__\n\n", indentSpaces);
+		} else {
+			// field values
+			strcat(indentSpaces, "- ");
+			node->DumpFieldValues(stdout, indentSpaces);
+			fprintf(stdout, "\n");
 		}
 
-		if (node->GetChild() != NULL) {display_HFATree(node->GetChild(), nIdent+1);}
+		if (node->GetChild() != NULL && (!avoid)) {
+			display_HFATree(node->GetChild(), nIdent+1);
+		}
 		if (node->GetNext() != NULL) {display_HFATree(node->GetNext(), nIdent);}
 	}
 
@@ -301,7 +280,7 @@ class HFAAnnotationLayer {
 			cerr << "GeoJSON is not supported yet!" << endl;
 		};
 
-		void printTree () { display_HFATree(root); }
+		void printTree () { display_HFATree(root, 0); }
 
 		friend ostream& operator<<(ostream& os, const HFAAnnotationLayer& hal) {
 			if (hal.hasSRS) {

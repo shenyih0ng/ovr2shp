@@ -56,15 +56,8 @@ void plot (vector<HFAAnnotation*> annotations, int buffer=1) {
 }
 
 int main (int argc, char* argv[]) {
-	bool displayTree = false;
-	bool plotAnno = false;
-	bool userDefinedSRS = false;
-	bool writeOutput = false;
-
-	const string displayTreeFlag = "-d"; //temp
-	const string plotFlag = "-p"; //temp
-	const string srsFlag = "-srs"; // temp
-	const string outputFlag = "-o"; //temp
+	bool display = false, displayTree = false, plotAnno = false, userDefinedSRS = false, writeOutput = false;	
+	const string displayFlag = "-d", displayTreeFlag = "-t", plotFlag = "-p", srsFlag = "-srs", outputFlag = "-o";
 
 	char* user_srs = NULL; //proj4
 	char* output_file_name = NULL;
@@ -75,6 +68,8 @@ int main (int argc, char* argv[]) {
 	for (int i = 1; i < argc; i++){
 		if (argv[i] == displayTreeFlag) {
 			displayTree = true;
+		} else if (argv[i] == displayFlag) {
+			display = true;
 		} else if (argv[i] == plotFlag) {
 			plotAnno = true;
 		} else if (argv[i] == srsFlag) {
@@ -109,7 +104,10 @@ int main (int argc, char* argv[]) {
 		hfaal->set_srs(user_srs);
 	}
 	
-	cout << *hfaal << endl;
+	// Display layer	
+	if (display) {
+		cout << *hfaal << endl;
+	}
 	
 	// Write to output file
 	if (writeOutput) {
