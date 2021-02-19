@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0">
+    <channel>
+        <title>ovr2shp Blog</title>
+        <link>https://shenyih0ng.github.io/</link>
+        <description>ovr2shp Blog</description>
+        <lastBuildDate>Fri, 19 Feb 2021 10:30:07 GMT</lastBuildDate>
+        <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
+        <generator>https://github.com/jpmonette/feed</generator>
+        <item>
+            <title><![CDATA[Parsing .ovr]]></title>
+            <link>https://shenyih0ng.github.io/ovr2shp/what-is-hfa</link>
+            <guid>what-is-hfa</guid>
+            <pubDate>Fri, 19 Feb 2021 10:30:07 GMT</pubDate>
+            <description><![CDATA[Hierarchical File Architecture(HFA) is Hexagon Geospatial's proprietary file format. It is the file format behind ERDAS Imagine .img files and ERDAS Imagine Annotation Layer .ovr files. It is not exactly the most "open" file standard out there, but luckily GDAL implements a raster driver for.img files, which offers an glimpse into the internals of HFA.]]></description>
+        </item>
+    </channel>
+</rss>
