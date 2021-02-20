@@ -1,7 +1,7 @@
+#include <map>
 #include <vector>
 #include <stdio.h>
 #include <iostream>
-#include <unordered_map>
 
 #define GDAL_INCLUDED
 #include "ogrsf_frmts.h" // GDAL vector drivers
@@ -11,7 +11,6 @@ using namespace std;
 
 /*
  * Prototypes
- *
  */
 
 bool extract_proj (HFAHandle hHFA, OGRSpatialReference& srs);
@@ -30,14 +29,16 @@ bool extract_proj (HFAHandle hHFA, OGRSpatialReference& srs);
 class HFAGeom {
 	double* center;
 	double orientation;
-	unordered_map<string, double> fieldValues;
+
 	public:
-		HFAGeom (HFAEntry*);
+		HFAGeom (HFAEntry* node) {
+			center = new double[2];
+			center[0] = node->GetDoubleField("center.x");
+			center[1] = node->GetDoubleField("center.y");
+			orientation = node->GetDoubleField("orientation");	
+		}
 		double* get_center() const { return center; };
 		double get_orien() const { return orientation; };
-		unordered_map<string, double> get_fieldValues () { return fieldValues; };
-
-		virtual string get_type () { return "bGeom"; };
 
 		virtual string to_wkt () { 
 			// TODO
@@ -72,28 +73,17 @@ class HFAEllipse: public HFAGeom {
 	double semiMinorAxis;
 	public:
 		HFAEllipse (HFAEntry* node):HFAGeom(node){
-			unordered_map<string, double> fvalues = HFAGeom::get_fieldValues();
-			string* fieldNames = get_fieldNames();
-			for (int idx=0; idx < fieldNames->size(); idx++) {
-				string fname = fieldNames[idx];
-				if (fname == "semiMajorAxis") { semiMajorAxis=fvalues.at(fname); }
-				else if (fname == "semiMinorAxis") { semiMinorAxis=fvalues.at(fname); }
-			}
+			semiMajorAxis = node->GetDoubleField("semiMajorAxis");
+			semiMinorAxis = node->GetDoubleField("semiMinorAxis");
 		};
 		double get_majX () { return semiMajorAxis; };
 		double get_minX () { return semiMinorAxis; };
-		string* get_fieldNames()
-		{
-			static string fieldNames[] = {"semiMajorAxis", "semiMinorAxis"};
-			return fieldNames;
-		}
 		
 		string to_wkt() { 
 			//TODO
 			return ""; 
 		};
 
-		string get_type () { return "ellipse"; };
 		ostream& write (ostream &os) const override{
 			os << "majx: " << semiMajorAxis << endl;
 			os << "minx: " << semiMinorAxis << endl;
@@ -116,13 +106,8 @@ class HFARectangle: public HFAGeom {
 
 	public:
 		HFARectangle (HFAEntry* node):HFAGeom(node){
-			unordered_map<string, double> fvalues = HFAGeom::get_fieldValues();
-			string* fieldNames = get_fieldNames();
-			for (int idx=0; idx < fieldNames->size(); idx++) {
-				string fname = fieldNames[idx];
-				if (fname == "width") { width=fvalues.at(fname); }
-				else if (fname == "height") { height=fvalues.at(fname); }
-			}
+			width = node->GetDoubleField("width");
+			height = node->GetDoubleField("height");
 		};
 		
 		// Returns the orientated pts	
@@ -132,12 +117,6 @@ class HFARectangle: public HFAGeom {
 
 		double get_width() { return width; };
 		double get_height() { return height; };
-		string get_type () { return "rectangle"; };
-		string * get_fieldNames()
-		{
-			static string fieldNames[] = {"width", "height"};
-			return fieldNames;
-		}
 
 		ostream& write (ostream &os) const override{
 			os << "width: " << width << " " << endl;
@@ -162,22 +141,36 @@ class HFARectangle: public HFAGeom {
  *
  */
 class HFAAnnotation {
-	char* name;
-	char* description;
-	HFAGeom* geom;
-	public:
-		HFAAnnotation (HFAEntry*);
-		char* get_name() { return name; };
+	const char* name;
+	const char* description;
+	const char* elmType;
+	int elmTypeId;
 
-		char* get_desc() { return description; };
+	HFAGeom* geom;
+
+	public:
+		HFAAnnotation (HFAEntry* node) {
+			name = node->GetStringField("name");
+			description = node->GetStringField("description");  
+			elmType = node->GetStringField("elmType");
+			elmTypeId = node->GetIntField("elmType");
+		}
+		const char* get_name() { return name; };
+
+		const char* get_desc() { return description; };
+
+		const char* get_type() { return elmType; };
+
+		int get_typeId () { return elmTypeId; };
 
 		HFAGeom* get_geom() { return geom; };
 
 		void set_geom(HFAGeom* g) { geom=g; };
 
 		friend ostream& operator<<(ostream& os, const HFAAnnotation& ha) {
-			os << "gtype: " << ha.geom->get_type() << endl;
-			os << "n: " << ha.name << " [" << ha.description << "]" << endl;
+			os << "type: " << ha.elmType << " [" << ha.elmTypeId << "]" << endl;
+			os << "n: " << ((ha.name == NULL) ? "" : ha.name);
+			os << " [" << ((ha.description == NULL) ? "" : ha.description) << "]" << endl;
 			os << *ha.geom << " ";
 
 			return os;	

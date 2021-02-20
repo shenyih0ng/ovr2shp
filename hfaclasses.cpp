@@ -5,54 +5,16 @@
 
 using namespace std;
 
-const string EANT_DTYPE_NAME = "Element_Eant";
-const string EANT_GROUP_DTYPE_NAME = "Element_2_Eant";
-
-const string ELLI_DTYPE_NAME = "Eant_Ellipse";
-const string RECT_DTYPE_NAME = "Rectangle2";
-
-const unordered_map<string, HFAGeomFactory*> hfaGeomFactories = {
-        {ELLI_DTYPE_NAME, new HFAEllipseFactory()},
-        {RECT_DTYPE_NAME, new HFARectangleFactory()}
-};
-
-/* 
- * get_xyCoords [utility]
+/*
+ * HFA_GEOM_FACTORIES
  *
- * Extract xy coordinates from HFAField that has x&y attributes
- * Examples of such fields includes "center", "origin"
- * 
- * @param xy	HFAField
- * @param data	GByte*
- * @param dataPos	GInt32
- * @param dataSize	GInt32
- *
- * @return double[2]{x,y}
+ * Supported Eants Geometries
+ * {<elmType_enum>, <HFAGeomFactory>}a
  */
-double* get_xyCoords (HFAField* xy, GByte* data, GInt32 dataPos, GInt32 dataSize) {
-	double* xyCoords = new double[2];
-
-	void* pReturn;
-	xy->ExtractInstValue(NULL, 0, data, dataPos, dataSize, 'p', &pReturn);
-	int nByteOffset = ((GByte *) pReturn) - data;
-	data += nByteOffset;
-	dataPos += nByteOffset;
-	dataSize -= nByteOffset;
-
-	HFAType* xyType = xy->poItemObjectType;
-	HFAField *coordX = xyType->papoFields[0];
-	coordX->ExtractInstValue(NULL, 0, data, dataPos, dataSize, 'd', &xyCoords[0]);
-
-	int nInstBytes = coordX->GetInstBytes(data);
-	data += nInstBytes;
-	dataPos += nInstBytes;
-	dataSize -= nInstBytes;
-
-	HFAField *coordY = xyType->papoFields[1];
-	coordY->ExtractInstValue(NULL, 0, data, dataPos, dataSize, 'd', &xyCoords[1]);
-
-	return xyCoords;
-}
+const map<int, HFAGeomFactory*> HFA_GEOM_FACTORIES = {
+        {13, new HFARectangleFactory()},
+        {14, new HFAEllipseFactory()}
+};
 
 /*
  * rotate [utility]
@@ -70,97 +32,6 @@ pair<double, double> rotate (pair<double, double> coord,  double rad) {
 
 	return make_pair(costheta*coord.first + sintheta*coord.second, 
 			costheta*coord.second - sintheta*coord.first);
-}
-
-/*
- * find [utility]
- *
- * Retrieve HFA nodes of specified type using recursive search
- *
- * @param node 	HFAEntry* start node
- * @param dtype_names set specified types
- *
- * @return vector<HFAEntry*> collection of HFAEntry of specified type
- *
- */
-vector<HFAEntry*> find (HFAEntry* node, set<string> dtype_names) {
-	vector<HFAEntry*> nodes_found;
-	vector<HFAEntry*> to_search;
-	to_search.push_back(node);
-	while(!to_search.empty()) {
-		HFAEntry* curr_node = to_search.back();
-		to_search.pop_back();
-		if(dtype_names.find(curr_node->GetType()) != dtype_names.end()) {
-			nodes_found.push_back(curr_node);
-		}
-		if (curr_node->GetNext() != NULL) {
-			to_search.push_back(curr_node->GetNext());
-		}
-		if (curr_node->GetChild() != NULL) {
-			to_search.push_back(curr_node->GetChild());
-		}
-	}
-
-	return nodes_found;
-}
-
-/*
- * find[utility]
- *
- * Overloaded
- *
- * @param node HFAEntry* start node
- * @param dtype_name string specified type
- *
- */
-vector<HFAEntry*> find (HFAEntry* node, string dtype_name) {
-	set<string> dtype = {dtype_name};
-	return find(node, dtype);
-}
-
-/*
- * HFAGeom()
- *
- * Construct an HFAGeom from HFAEntry.
- *
- * Caveats:
- * - Only extracts fields/nested fields that have a 'd' dtype (double)
- * 
- * @param node	HFAEntry representing a HFA "geometry" object e.g Rectangle2, Eant_Ellipse
- */
-HFAGeom::HFAGeom (HFAEntry* node) {
-	string CENTER_FIELD_NAME = "center";
-	string ORIGIN_FIELD_NAME = "origin"; // temp (for Text2 compatbility)
-	string ORIEN_FIELD_NAME = "orientation";
-
-	int iField = 0;
-	double fval;
-	HFAField *poField;
-
-	HFAType* ntype = node->GetPoType();
-	GByte* data = node->GetData();
-	GInt32 dataPos = node->GetDataPos();
-	GInt32 dataSize = node->GetDataSize();
-	
-	while (iField < ntype->nFields) {
-		poField = ntype->papoFields[iField];	
-		char* fieldName = poField->pszFieldName;
-		if (fieldName == CENTER_FIELD_NAME || fieldName == ORIGIN_FIELD_NAME) {
-			center = get_xyCoords(poField, data, dataPos, dataSize);	
-		} else if (poField->chItemType == 'd') {
-			poField->ExtractInstValue(NULL, 0, data, dataPos, dataSize, 'd', &fval);
-			if (fieldName == ORIEN_FIELD_NAME) {
-				orientation = (double)fval;
-			} else {
-				fieldValues.insert(make_pair<string, double>(fieldName, (double)fval));	
-			}
-		}
-		int nInstBytes = poField->GetInstBytes(data);
-		data += nInstBytes;
-		dataPos += nInstBytes;
-		dataSize -= nInstBytes;
-		iField++;	
-	}
 }
 
 /*
@@ -210,9 +81,10 @@ pair<T,U> operator+(const pair<T,U>& l, double* r) {
  * @return vector<pair<double, double>> four orientated corners
  */
 vector<pair<double, double>> HFARectangle::get_pts() const {
+	vector<pair<double, double>> orientated;
+
 	double* center = get_center();
 	double orientation = get_orien();
-	vector<pair<double, double>> orientated;
 	vector<pair<double, double>> unorientated = get_unorientated_pts();
 	vector<pair<double, double>>::iterator it;
 	for (it = unorientated.begin(); it != unorientated.end(); it++) {
@@ -248,38 +120,55 @@ string HFARectangle::to_wkt() {
 }
 
 /*
- * HFAAnnotation()
+ * find [utility]
  *
- * Constructs an HFAAnnotation from HFAEntry
+ * Retrieve HFA node of specified name using recursive search
  *
- * @param node	HFAEntry representing a HFA "annotation" object e.g. Element_Eant, Element_2_Eant
+ * @param node 	HFAEntry* start node
+ * @param name  string target name
+ *
+ * @return HFAEntry* HFAEntry of specified name
+ *
  */
-HFAAnnotation::HFAAnnotation(HFAEntry* node) {
-	string NAME_FIELD = "name";
-	string DESC_FIELD = "description";
+HFAEntry* find (HFAEntry* node, string name) {
+	if(node->GetName() == name) {
+		return node;
+	}
 
-	int iField = 0;
-	char* fval;
-	HFAField *poField;
+	if (node->GetNext() != NULL) {
+		return find(node->GetNext(), name);
+	}
 
-	HFAType* ntype = node->GetPoType();
-	GByte* data = node->GetData();
-	GInt32 dataPos = node->GetDataPos();
-	GInt32 dataSize = node->GetDataSize();
+	if (node->GetChild() != NULL) {
+		return find(node->GetChild(), name);
+	}
 
-	while (iField < ntype->nFields) {
-		poField = ntype->papoFields[iField];	
-		char* fieldName = poField->pszFieldName;
-		if (fieldName == NAME_FIELD || fieldName == DESC_FIELD) {
-			poField->ExtractInstValue(NULL, 0, data, dataPos, dataSize, 's', &fval);
-			if (fieldName == NAME_FIELD) { name = fval; }
-			else { description = fval; }
-		}
-		int nInstBytes = poField->GetInstBytes(data);
-		data += nInstBytes;
-		dataPos += nInstBytes;
-		dataSize -= nInstBytes;
-		iField++;	
+	return NULL;
+}
+
+/*
+ * find_eants
+ *
+ * Find all Eants that currently supported
+ *
+ * @param eant 		HFAEntry*	 	start node (first child of ElementList)
+ * @param tgEants	vector<HFAEntry*>&	collection of extracted Eants that are supported
+ *
+ */
+void find_eants (HFAEntry* eant, vector<HFAEntry*>& tgEants) {
+	eant->LoadData();
+	int elmType = eant->GetIntField("elmType");
+
+	if (elmType != 0 && HFA_GEOM_FACTORIES.find(elmType) != HFA_GEOM_FACTORIES.end()) {
+		tgEants.push_back(eant);		
+	}
+
+	if (eant->GetChild() != NULL) {
+		find_eants(eant->GetChild(), tgEants);
+	}	
+
+	if (eant->GetNext() != NULL) {
+		find_eants(eant->GetNext(), tgEants);
 	}
 }
 
@@ -292,40 +181,34 @@ HFAAnnotation::HFAAnnotation(HFAEntry* node) {
  */
 HFAAnnotationLayer::HFAAnnotationLayer(HFAHandle handle) {
 	hHFA = handle;
-
-	// extract projection/crs
 	hasSRS = extract_proj(hHFA, srs);
 	if (!hasSRS) {
 		cerr << "[warn] no map info found/unsupported projections in file" << endl;
 	}
 
 	root = hHFA->poRoot;	
-	set<string> dtypes = {EANT_DTYPE_NAME, EANT_GROUP_DTYPE_NAME};
+	HFAEntry* hfaElmList = find(root, "ElementList");
 	
-	// add annotations
-	vector<HFAEntry*> eantElements = find(root, dtypes);
+	if (hfaElmList == NULL) {
+		cout << "[exit] no Eants(annotations) found!" << endl;
+		exit(100);
+	}
+
+	vector<HFAEntry*> elmEants;
+	find_eants(hfaElmList->GetChild(), elmEants);
+
 	vector<HFAEntry*>::iterator it;
+	for (it = elmEants.begin(); it != elmEants.end(); ++it) {
+		HFAAnnotation* hfaA = new HFAAnnotation(*it);
+		map<int, HFAGeomFactory*>::const_iterator gIt = HFA_GEOM_FACTORIES.find(
+				(*it)->GetIntField("elmType"));
+		HFAEntry* hfaAGeomChild = (*it)->GetChild();
+		HFAGeomFactory* gFactory = gIt->second;
+		HFAGeom* hfaAGeom = gFactory->create(hfaAGeomChild);
+		hfaA->set_geom(hfaAGeom);
 
-	for (it=eantElements.begin(); it != eantElements.end(); ++it) {
-		HFAEntry* eantElement = *it;
-		if (eantElement->GetChild() != NULL) {
-			const char* cType = eantElement->GetChild()->GetType();
-			unordered_map<string, HFAGeomFactory*>::const_iterator gIt = hfaGeomFactories.find(cType);
-			if (gIt != hfaGeomFactories.end()) {
-				eantElement->LoadData();
-				HFAAnnotation* hfaA = new HFAAnnotation(eantElement);
-				HFAEntry* child = eantElement->GetChild();
-				child->LoadData();
-
-				HFAGeom* annoGeom;
-				HFAGeomFactory* factory = gIt->second;
-				annoGeom = factory->create(child);
-				hfaA->set_geom(annoGeom);
-
-				add_anno(hfaA); // add to layer
-			}
-		}
-	}		
+		add_anno(hfaA);
+	}
 }
 
 
