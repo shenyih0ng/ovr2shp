@@ -17,6 +17,13 @@ const map<int, HFAGeomFactory*> HFA_GEOM_FACTORIES = {
         {14, new HFAEllipseFactory()}
 };
 
+//TEMP
+const map<int, const char*> HFA_GEOM_MAPPING = {
+	{10, "EANT_TEXT"},
+	{13, "EANT_RECTANGLE"},
+	{14, "EANT_ELLIPSE"}
+};
+
 /*
  * rotate [utility]
  *
@@ -237,6 +244,47 @@ HFAAnnotationLayer::HFAAnnotationLayer(HFAHandle hHFA) {
 	}
 }
 
+/*
+ * HFAAnnotationLayer
+ *
+ * display_HFATree
+ *
+ * Tree view of HFA structure
+ * - displays the name, dtype and size of HFA nodes
+ * - seg fault occurs when trying to recursively display StyleLibrary //TODO
+ *
+ * @param node 		HFAEntry* start node
+ * @param nIdent	int	  indentation prefix
+ * */
+void HFAAnnotationLayer::display_HFATree(HFAEntry* node, int nIdent) {
+	string _avoid = "StyleLibrary";
+	bool avoid = (node->GetName() == _avoid);
+
+	static char indentSpaces[128];
+	for (int i = 0; i < nIdent; i++) {
+		indentSpaces[i] = ' ';
+	}
+	indentSpaces[nIdent] = '\0';
+
+	fprintf( stdout, "%s%s(%s) @ %d + %d @ %d\n", indentSpaces,
+		     node->GetName(), node->GetType(),
+		     node->GetFilePos(),
+		     node->GetDataSize(), node->GetDataPos() );
+
+	if (avoid) {
+		fprintf(stdout, "%s__omitted__\n\n", indentSpaces);
+	} else {
+		// field values
+		strcat(indentSpaces, "- ");
+		node->DumpFieldValues(stdout, indentSpaces);
+		fprintf(stdout, "\n");
+	}
+
+	if (node->GetChild() != NULL && (!avoid)) {
+		display_HFATree(node->GetChild(), nIdent+1);
+	}
+	if (node->GetNext() != NULL) {display_HFATree(node->GetNext(), nIdent);}
+}
 
 /*
  * HFAAnnotationLayer
@@ -245,7 +293,6 @@ HFAAnnotationLayer::HFAAnnotationLayer(HFAHandle hHFA) {
  * - write/export HFAAnnotationLayer to ShapeFile (.shp)
  *
  * Caveats
- * - Currently only supports OGRPolygon & Polygon wkts
  * - Setting the layer name does not work expected (layer name turns out to be the base name of the output file name/path)
  * - Field width will be truncated to 254 when set to 256 (i guess the max field width is 254)  
  *
@@ -259,51 +306,95 @@ void HFAAnnotationLayer::write_to_shp (const char* driverName, char* ofilename) 
 		exit(1);
 	}
 
-	OGRLayer* layer;
-	gdalDs = driver->Create(ofilename, 0, 0, 0, GDT_Unknown, NULL);
-	
-	if (hasSRS) {
-		layer = gdalDs->CreateLayer(NULL, new OGRSpatialReference(get_srs()), wkbPolygon, NULL);
-	} else {
-		layer = gdalDs->CreateLayer(NULL, NULL, wkbPolygon, NULL);
-	}
-	
-	OGRFieldDefn nameField("name", OFTString);
-	nameField.SetWidth(254);
-	if (layer->CreateField(&nameField) != OGRERR_NONE) {
-		cout << "failed creating name field" << endl;
-		exit(1);
-	}
+	set<int> gTypes = get_geomTypes();
+	GDALDataset* gdalDatasets[gTypes.size()];
+	map<int, OGRLayer*> layers;
 
-	OGRFieldDefn descField("desc", OFTString);
-	descField.SetWidth(254);
-	if (layer->CreateField(&descField) != OGRERR_NONE) {
-		cout << "failed creating description field" << endl;
-		exit(1);
+	int c = 0;
+	for (set<int>::iterator gtIt = gTypes.begin(); gtIt != gTypes.end(); ++gtIt) {
+		map<int, const char*>::const_iterator gmapIt = HFA_GEOM_MAPPING.find(*gtIt);
+		const char* geomName = gmapIt->second;
+
+		string _fileName = ofilename;
+		size_t ldirSep = _fileName.find_last_of('/');
+		string _fileBaseName = _fileName.substr(ldirSep);
+		size_t fextSep = _fileBaseName.find_first_of('.');
+		_fileName.insert(fextSep + ldirSep, geomName);
+
+		GDALDataset* ds = driver->Create(_fileName.c_str(), 0, 0, 0, GDT_Unknown,NULL);
+		OGRLayer* l;		
+		OGRwkbGeometryType lgeomType;
+
+		if ((*gtIt) == 10) {
+			lgeomType = wkbPoint;
+		} else {
+			lgeomType = wkbPolygon;
+		}
+
+		l = ds->CreateLayer(NULL,((hasSRS == false) ? NULL: new OGRSpatialReference(get_srs())), lgeomType, NULL);
+		
+		// Layer Fields
+		
+		OGRFieldDefn nameField("name", OFTString);
+		nameField.SetWidth(254);
+		if (l->CreateField(&nameField) != OGRERR_NONE) {
+			cout << "failed creating name field" << endl;
+			exit(1);
+		}
+
+		OGRFieldDefn descField("desc", OFTString);
+		descField.SetWidth(254);
+		if (l->CreateField(&descField) != OGRERR_NONE) {
+			cout << "failed creating description field" << endl;
+			exit(1);
+		}
+
+		if ((*gtIt) == 10) {
+			OGRFieldDefn textField("text", OFTString);
+			textField.SetWidth(254);
+			if (l->CreateField(&textField) != OGRERR_NONE) {
+				cout << "failed creating text field" << endl;
+				exit(1);
+			}
+		}
+
+		layers.insert(make_pair((*gtIt), l));
+		gdalDatasets[c] = ds;
+		c++;
 	}
+	
 
 	vector<HFAAnnotation*> annotations = get_annos();	
 	vector<HFAAnnotation*>::const_iterator it;
 	for (it = annotations.begin(); it != annotations.end(); ++it) {
 		OGRFeature* feat;
-		OGRPolygon polygon;
+		OGRGeometry* geom;
 
-		feat = OGRFeature::CreateFeature(layer->GetLayerDefn());
+		feat = OGRFeature::CreateFeature(layers[(*it)->get_typeId()]->GetLayerDefn());
 		feat->SetField("name", (*it)->get_name());
 		feat->SetField("desc", (*it)->get_desc());
 
-		HFAGeom* hfaGeom = (*it)->get_geom();
+		HFAGeom* hfaGeom = (*it)->get_geom();	
+
+		if ((*it)->get_typeId() == 10) {
+			HFAText* hfaText = dynamic_cast<HFAText*>(hfaGeom);
+			feat->SetField("text", hfaText->get_text());
+		}
+		
 		string wktStr = hfaGeom->to_wkt();
 		const char* wkt = wktStr.c_str();
-		polygon.importFromWkt(&wkt);
-		feat->SetGeometry(&polygon);
 
-		if (layer->CreateFeature(feat) != OGRERR_NONE) {
+		OGRGeometryFactory::createFromWkt(wkt, NULL, &geom);
+		feat->SetGeometry(geom);
+
+		if (layers[(*it)->get_typeId()]->CreateFeature(feat) != OGRERR_NONE) {
 			cout << "failed to create feature" << endl;
 		}
 
 		OGRFeature::DestroyFeature(feat);
 	}
-
-	GDALClose(gdalDs);
+	
+	for (int dsIdx = 0; dsIdx < gTypes.size(); dsIdx++) {	
+		GDALClose(gdalDatasets[dsIdx]);
+	}
 }

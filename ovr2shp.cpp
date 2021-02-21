@@ -36,7 +36,7 @@ void plot (vector<HFAAnnotation*> annotations, int buffer=1) {
 		vector<pair<double, double>> pts = (*it)->get_geom()->get_pts();
 		combined.insert(combined.end(), pts.begin(), pts.end());
 		if (pts.size() == 1) {
-			cmd += g.file1d(pts) + "with circles title '" + (*it)->get_name() + "', \\\n";
+			cmd += g.file1d(pts) + "title '" + (*it)->get_name() + "', \\\n";
 		} else {
 			cmd += g.file1d(pts) + "with lines title '" + (*it)->get_name() + "', \\\n";
 		}
@@ -52,6 +52,8 @@ void plot (vector<HFAAnnotation*> annotations, int buffer=1) {
 
 	g << "set xrange[" << xmin - (xmax-xmin)*buffer << ":" << xmax + (xmax-xmin)*buffer << "]\n";
 	g << "set yrange[" << ymin - (ymax-ymin)*buffer << ":" << ymax + (ymax-ymin)*buffer << "]\n";
+	g << "set key font \",7\"\n";
+	g << "set key outside\n";
 	g << cmd << endl;	
 }
 

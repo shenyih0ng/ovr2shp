@@ -44,6 +44,8 @@ class HFAGeom {
 			center[1] = node->GetDoubleField("center.y");
 			orientation = node->GetDoubleField("orientation");	
 		}
+		
+		virtual ~HFAGeom (){}; // for dynamic_cast
 
 		double* get_center() const { return center; };
 
@@ -273,35 +275,7 @@ class HFAAnnotationLayer {
 	 * @param node 		HFAEntry* start node
 	 * @param nIdent	int	  indentation prefix
 	 * */
-	void display_HFATree(HFAEntry* node, int nIdent) {
-		string _avoid = "StyleLibrary";
-		bool avoid = (node->GetName() == _avoid);
-
-		static char indentSpaces[128];
-		for (int i = 0; i < nIdent; i++) {
-			indentSpaces[i] = ' ';
-		}
-		indentSpaces[nIdent] = '\0';
-
-		fprintf( stdout, "%s%s(%s) @ %d + %d @ %d\n", indentSpaces,
-			     node->GetName(), node->GetType(),
-			     node->GetFilePos(),
-			     node->GetDataSize(), node->GetDataPos() );
-
-		if (avoid) {
-			fprintf(stdout, "%s__omitted__\n\n", indentSpaces);
-		} else {
-			// field values
-			strcat(indentSpaces, "- ");
-			node->DumpFieldValues(stdout, indentSpaces);
-			fprintf(stdout, "\n");
-		}
-
-		if (node->GetChild() != NULL && (!avoid)) {
-			display_HFATree(node->GetChild(), nIdent+1);
-		}
-		if (node->GetNext() != NULL) {display_HFATree(node->GetNext(), nIdent);}
-	}
+	void display_HFATree(HFAEntry* node, int nIdent);
 
 	void write_to_shp (const char*, char*);
 
