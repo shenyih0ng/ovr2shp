@@ -9,9 +9,10 @@ using namespace std;
  * HFA_GEOM_FACTORIES
  *
  * Supported Eants Geometries
- * {<elmType_enum>, <HFAGeomFactory>}a
+ * {<elmType_enum>, <HFAGeomFactory>}
  */
 const map<int, HFAGeomFactory*> HFA_GEOM_FACTORIES = {
+	{10, new HFATextFactory()},
         {13, new HFARectangleFactory()},
         {14, new HFAEllipseFactory()}
 };
@@ -32,6 +33,80 @@ pair<double, double> rotate (pair<double, double> coord,  double rad) {
 
 	return make_pair(costheta*coord.first + sintheta*coord.second, 
 			costheta*coord.second - sintheta*coord.first);
+}
+
+template <typename T, typename U>
+pair<T,U> operator-(const pair<T,U>& l, double* r) {
+	return {l.first - r[0], l.second - r[1]};
+}
+
+template <typename T, typename U>
+pair<T,U> operator+(const pair<T,U>& l, double* r) {
+	return {l.first + r[0], l.second + r[1]};
+}
+
+/*
+ * rotate
+ *
+ * @return vector<pair<double, double>> orientated points
+ */
+vector<pair<double, double>> rotate(vector<pair<double, double>> pts, double* center, double orientation){
+	vector<pair<double, double>> orientated;
+
+	vector<pair<double, double>>::iterator it;
+	for (it = pts.begin(); it != pts.end(); it++) {
+		pair<double, double> vect_coord = rotate(*it - center, orientation) + center;
+		orientated.push_back(vect_coord);
+	}
+	return orientated;
+}
+/*
+ * to_polyWKT [utility]
+ *
+ * Construct polygon wkt (well-known text) from points
+ *
+ * @param  pts	 vector<pair<double, double>> 
+ * @return string  polygon wkt
+ */
+string to_polyWKT (vector<pair<double, double>> pts) {
+	string wkt = "POLYGON ((";
+	vector<pair<double, double>>::const_iterator it;
+	for (it = pts.begin(); it != pts.end(); ++it) {
+		pair<double, double> pt = *it;
+		if (it == pts.end() -1) {
+			wkt += to_string(pt.first) + " " + to_string(pt.second);
+			wkt += "))";
+		} else {
+			wkt += to_string(pt.first) + " " + to_string(pt.second) + ", ";
+		}
+	}
+
+	return wkt;
+}
+
+/*
+ * HFAEllipse
+ *
+ * get_unorientated_pts
+ * - discretizes ellipse to polygon without rotation
+ *
+ * @returns vector<pair<double, double>>
+ */
+vector<pair<double, double>> HFAEllipse::get_unorientated_pts () const {
+	vector<pair<double, double>> pts;
+
+	double* center = get_center();	
+	int seg = max((int)floor(sqrt(((semiMajorAxis + semiMinorAxis) / 2) * 20)), 8);
+	double shift = (44/7.0f)/seg; // (44/7) -> approx of 2pi
+	double theta = 0.0; 
+	for (int i = 0; i < seg; ++i) { 
+	    theta += shift; 
+	    pts.push_back(make_pair(center[0]+(semiMajorAxis*cos(theta)),
+				    center[1]+(semiMinorAxis*sin(theta))));
+	} 
+
+	pts.push_back(pts[0]);
+	return pts;
 }
 
 /*
@@ -62,63 +137,6 @@ vector<pair<double, double>> HFARectangle::get_unorientated_pts() const {
 	return pts;	
 }
 
-template <typename T, typename U>
-pair<T,U> operator-(const pair<T,U>& l, double* r) {
-	return {l.first - r[0], l.second - r[1]};
-}
-
-template <typename T, typename U>
-pair<T,U> operator+(const pair<T,U>& l, double* r) {
-	return {l.first + r[0], l.second + r[1]};
-}
-
-/*
- * HFARectangle
- *
- * get_pts
- * - get the 4 orientated corners of the rectangle
- *
- * @return vector<pair<double, double>> four orientated corners
- */
-vector<pair<double, double>> HFARectangle::get_pts() const {
-	vector<pair<double, double>> orientated;
-
-	double* center = get_center();
-	double orientation = get_orien();
-	vector<pair<double, double>> unorientated = get_unorientated_pts();
-	vector<pair<double, double>>::iterator it;
-	for (it = unorientated.begin(); it != unorientated.end(); it++) {
-		pair<double, double> vect_coord = rotate(*it - center, orientation) + center;
-		orientated.push_back(vect_coord);
-	}
-	return orientated;
-}
-
-/*
- * HFARectangle
- *
- * to_wkt
- * - Construct wkt (well-known text) from orientated points of HFARectangle
- *
- * @return string  polygon wkt of HFARectangle
- */
-string HFARectangle::to_wkt() {
-	string wkt = "POLYGON ((";
-	vector<pair<double, double>> pts = get_pts();
-	vector<pair<double, double>>::const_iterator it;
-	for (it = pts.begin(); it != pts.end(); ++it) {
-		pair<double, double> pt = *it;
-		if (it == pts.end() -1) {
-			wkt += to_string(pt.first) + " " + to_string(pt.second);
-			wkt += "))";
-		} else {
-			wkt += to_string(pt.first) + " " + to_string(pt.second) + ", ";
-		}
-	}
-
-	return wkt;
-}
-
 /*
  * find [utility]
  *
@@ -134,13 +152,21 @@ HFAEntry* find (HFAEntry* node, string name) {
 	if(node->GetName() == name) {
 		return node;
 	}
-
-	if (node->GetNext() != NULL) {
-		return find(node->GetNext(), name);
-	}
+	
+	HFAEntry* tgNode = NULL;
 
 	if (node->GetChild() != NULL) {
-		return find(node->GetChild(), name);
+		tgNode = find(node->GetChild(), name);
+		if (tgNode != NULL) {
+			return tgNode;
+		}
+	}
+
+	if (node->GetNext() != NULL) {
+		tgNode = find(node->GetNext(), name);
+		if (tgNode != NULL) {
+			return tgNode;
+		}
 	}
 
 	return NULL;
@@ -179,8 +205,7 @@ void find_eants (HFAEntry* eant, vector<HFAEntry*>& tgEants) {
  *
  * @param handle   HFAHandle HFA File Handle
  */
-HFAAnnotationLayer::HFAAnnotationLayer(HFAHandle handle) {
-	hHFA = handle;
+HFAAnnotationLayer::HFAAnnotationLayer(HFAHandle hHFA) {
 	hasSRS = extract_proj(hHFA, srs);
 	if (!hasSRS) {
 		cerr << "[warn] no map info found/unsupported projections in file" << endl;
@@ -202,6 +227,7 @@ HFAAnnotationLayer::HFAAnnotationLayer(HFAHandle handle) {
 		HFAAnnotation* hfaA = new HFAAnnotation(*it);
 		map<int, HFAGeomFactory*>::const_iterator gIt = HFA_GEOM_FACTORIES.find(
 				(*it)->GetIntField("elmType"));
+		add_geomType(gIt->first); // add geomtype as metadata of alayer
 		HFAEntry* hfaAGeomChild = (*it)->GetChild();
 		HFAGeomFactory* gFactory = gIt->second;
 		HFAGeom* hfaAGeom = gFactory->create(hfaAGeomChild);
@@ -279,5 +305,5 @@ void HFAAnnotationLayer::write_to_shp (const char* driverName, char* ofilename) 
 		OGRFeature::DestroyFeature(feat);
 	}
 
-	GDALClose(gdalDs);	
+	GDALClose(gdalDs);
 }

@@ -1,4 +1,5 @@
 #include <map>
+#include <set>
 #include <vector>
 #include <stdio.h>
 #include <iostream>
@@ -13,7 +14,13 @@ using namespace std;
  * Prototypes
  */
 
+HFAEntry* find (HFAEntry* node, string name);
+
 bool extract_proj (HFAHandle hHFA, OGRSpatialReference& srs);
+
+string to_polyWKT (vector<pair<double, double>> pts);
+
+vector<pair<double, double>> rotate (vector<pair<double, double>> pts, double* center, double orientation);
 
 /*
  * HFAGeom
@@ -37,12 +44,21 @@ class HFAGeom {
 			center[1] = node->GetDoubleField("center.y");
 			orientation = node->GetDoubleField("orientation");	
 		}
+
 		double* get_center() const { return center; };
+
+		void set_center (double* nCenter) { center = nCenter; };
+
 		double get_orien() const { return orientation; };
 
-		virtual string to_wkt () { 
-			// TODO
-			return ""; 
+		void set_orien(double nOrien) { orientation = nOrien; };
+
+		virtual string to_wkt () const { 
+			string wkt = "POINT(";
+			wkt +=  to_string(center[0]) + " " + to_string(center[1]);
+			wkt += ")";
+			
+			return wkt;
 		};
 
 		virtual ostream &write(ostream& os) const { return os;}
@@ -71,6 +87,9 @@ class HFAGeom {
 class HFAEllipse: public HFAGeom {
 	double semiMajorAxis;
 	double semiMinorAxis;
+
+	vector<pair<double, double>> get_unorientated_pts() const;
+
 	public:
 		HFAEllipse (HFAEntry* node):HFAGeom(node){
 			semiMajorAxis = node->GetDoubleField("semiMajorAxis");
@@ -79,14 +98,18 @@ class HFAEllipse: public HFAGeom {
 		double get_majX () { return semiMajorAxis; };
 		double get_minX () { return semiMinorAxis; };
 		
-		string to_wkt() { 
-			//TODO
-			return ""; 
+		vector<pair<double, double>> get_pts() const {
+			return rotate(get_unorientated_pts(), get_center(), get_orien());
+		}
+
+		string to_wkt() const { 
+			return to_polyWKT(get_pts());
 		};
 
 		ostream& write (ostream &os) const override{
 			os << "majx: " << semiMajorAxis << endl;
 			os << "minx: " << semiMinorAxis << endl;
+			os << to_wkt() << endl;
 
 			return os;
 		}
@@ -111,9 +134,13 @@ class HFARectangle: public HFAGeom {
 		};
 		
 		// Returns the orientated pts	
-		vector<pair<double, double>> get_pts() const;
+		vector<pair<double, double>> get_pts() const {
+			return rotate(get_unorientated_pts(), get_center(), get_orien());
+		}
 		
-		string to_wkt ();
+		string to_wkt () const {
+			return to_polyWKT(get_pts());
+		}
 
 		double get_width() { return width; };
 		double get_height() { return height; };
@@ -131,6 +158,45 @@ class HFARectangle: public HFAGeom {
 			return os;
 		}
 };
+
+/*
+ * TODO
+ * HFAPolyline
+ * 
+ * Subclass of HFAGeom for "Polyline2" node types
+ *
+ */
+
+/*
+ * HFAText
+ *
+ * Subclass of HFAGeom for "Text2"
+ *
+ */
+class HFAText: public HFAGeom {
+	const char* text;
+
+	public:
+		HFAText(HFAEntry* node):HFAGeom(node) {
+			double* origin = new double[2];
+			origin[0] = node->GetDoubleField("origin.x");
+			origin[1] = node->GetDoubleField("origin.y");
+			set_center(origin);
+
+			text = node->GetStringField("text.string");
+		}
+
+		const char* get_text () { return text; };
+
+		ostream& write (ostream &os) const override{
+			os << "textval: " << text << endl;
+			os << to_wkt() << endl;
+
+			return os;
+		}
+
+};
+
 
 /*
  * HFAAnnotation
@@ -194,6 +260,8 @@ class HFAAnnotationLayer {
 	vector<HFAAnnotation*> annotations;
 
 	GDALDataset *gdalDs;
+
+	set<int> geomTypes;
 
 	/*
 	 * display [utility]
@@ -262,6 +330,10 @@ class HFAAnnotationLayer {
 
 		int get_num_annos() { return annotations.size(); }
 
+		set<int> get_geomTypes () { return geomTypes; }
+
+		void add_geomType (int nGeomType) { geomTypes.insert(nGeomType); }
+
 		void to_shp (char* ofilename) {
 			const char* shpDriverName = "ESRI Shapefile";
 			write_to_shp(shpDriverName, ofilename);	
@@ -291,6 +363,13 @@ class HFAAnnotationLayer {
 				HFAAnnotation* anno = *it;
 				os << *anno << endl;
 			}
+			
+			set<int>::const_iterator sIt;
+			os << "geomTypes: ";
+			for (sIt = hal.geomTypes.begin(); sIt != hal.geomTypes.end(); ++sIt) {
+				os << (*sIt) << " ";
+			}
+			os << endl;	
 
 			return os;	
 		}
@@ -328,4 +407,15 @@ class HFAEllipseFactory: public HFAGeomFactory {
 class HFARectangleFactory: public HFAGeomFactory {
 	public:
 		HFARectangle* create(HFAEntry* node) { return new HFARectangle(node); }
+};
+
+/*
+ * HFATextFactory
+ *
+ * Factory for HFA Text geometry(?) nodes
+ *
+ */
+class HFATextFactory: public HFAGeomFactory {
+	public:
+		HFAText* create(HFAEntry* node) { return new HFAText(node); }
 };

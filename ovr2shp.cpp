@@ -102,6 +102,7 @@ int main (int argc, char* argv[]) {
 	// Inject user defined SRS (overwrites native projection in file)
 	if (userDefinedSRS) {
 		hfaal->set_srs(user_srs);
+		cout << "[info] user defined srs: " << user_srs << endl;
 	}
 	
 	// Display layer	
@@ -120,6 +121,7 @@ int main (int argc, char* argv[]) {
 		} else if (file_ext == "geojson") {
 			hfaal->to_gjson(output_file_name);
 		}
+		cout << "[info] " << output_file_name << " saved" << endl;
 	}
 	
 	// Display HFA Tree Structure	
