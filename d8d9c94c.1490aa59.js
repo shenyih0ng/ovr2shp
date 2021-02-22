@@ -1,1 +1,0 @@
-(window.webpackJsonp=window.webpackJsonp||[]).push([[13],{81:function(o){o.exports=JSON.parse('{"allTagsPath":"/ovr2shp/tags","slug":"ovr","name":"ovr","count":1,"permalink":"/ovr2shp/tags/ovr"}')}}]);
