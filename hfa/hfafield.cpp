@@ -1135,9 +1135,11 @@ void HFAField::DumpInstValue( FILE *fpOut,
               HFAStandard( 4, &nColumns );
               memcpy( &nBaseItemType, pabyData+16, 2 );
               HFAStandard( 2, &nBaseItemType );
-              
-              VSIFPrintf( fpOut, "%dx%d basedata of type %s\n",
-                          nRows, nColumns, HFAGetDataTypeName(nBaseItemType) );
+
+	      double bval;
+	      ExtractInstValue(NULL, iEntry, pabyData, nDataOffset, nDataSize, 'd', &bval);   
+	      VSIFPrintf(fpOut, "%f (b%dx%d %s)\n", 
+			      bval, nRows, nColumns, HFAGetDataTypeName(nBaseItemType));
           }
           break;
 
