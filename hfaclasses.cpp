@@ -13,15 +13,17 @@ using namespace std;
  */
 const map<int, HFAGeomFactory*> HFA_GEOM_FACTORIES = {
 	{10, new HFATextFactory()},
-        {13, new HFARectangleFactory()},
-        {14, new HFAEllipseFactory()}
+	{13, new HFARectangleFactory()},
+	{14, new HFAEllipseFactory()},
+	{16, new HFAPolylineFactory()}
 };
 
 //TEMP
 const map<int, const char*> HFA_GEOM_MAPPING = {
 	{10, "EANT_TEXT"},
 	{13, "EANT_RECTANGLE"},
-	{14, "EANT_ELLIPSE"}
+	{14, "EANT_ELLIPSE"},
+	{16, "EANT_POLYLINE"}
 };
 
 /*
@@ -67,10 +69,11 @@ vector<pair<double, double>> rotate(vector<pair<double, double>> pts, double* ce
 	}
 	return orientated;
 }
+
 /*
  * to_polyWKT [utility]
  *
- * Construct polygon wkt (well-known text) from points
+ * Construct Polygon wkt (well-known text) from points
  *
  * @param  pts	 vector<pair<double, double>> 
  * @return string  polygon wkt
@@ -83,6 +86,30 @@ string to_polyWKT (vector<pair<double, double>> pts) {
 		if (it == pts.end() -1) {
 			wkt += to_string(pt.first) + " " + to_string(pt.second);
 			wkt += "))";
+		} else {
+			wkt += to_string(pt.first) + " " + to_string(pt.second) + ", ";
+		}
+	}
+
+	return wkt;
+}
+
+/*
+ * to_linestrWKT [utility]
+ *
+ * Construct LineString wkt (well-known text) from points
+ *
+ * @param  pts	 vector<pair<double, double>> 
+ * @return string  polygon wkt
+ */
+string to_linestrWKT (vector<pair<double, double>> pts) {
+	string wkt = "LINESTRING(";
+	vector<pair<double, double>>::const_iterator it;
+	for (it = pts.begin(); it != pts.end(); ++it) {
+		pair<double, double> pt = *it;
+		if (it == pts.end() -1) {
+			wkt += to_string(pt.first) + " " + to_string(pt.second);
+			wkt += ")";
 		} else {
 			wkt += to_string(pt.first) + " " + to_string(pt.second) + ", ";
 		}
@@ -142,6 +169,92 @@ vector<pair<double, double>> HFARectangle::get_unorientated_pts() const {
 	}
 	pts.push_back(pts[0]);
 	return pts;	
+
+}
+
+/*
+ * get_field [utility]
+ *
+ * Traverse down HFAType structure to get requested HFAField while incrementing memory/data offset
+ *
+ * @param ntype		HFAType*
+ * @param tFieldName	string		query field name
+ * @params
+ * 	data
+ * 	dataPos
+ * 	dataSize
+ * @returns HFAField*
+ */
+HFAField* get_field (HFAType* ntype, string tFieldName, GByte*& data, GInt32& dataPos, GInt32& dataSize) {
+	HFAField* targetField;	
+
+	int iField = 0;
+	HFAField* currField;
+	while (iField < ntype->nFields) {
+		currField = ntype->papoFields[iField];	
+		char* fieldName = currField->pszFieldName;
+		if (fieldName == tFieldName) {
+			targetField = currField;
+			break;
+		};
+
+		int nInstBytes = currField->GetInstBytes(data);
+		data += nInstBytes;
+		dataPos += nInstBytes;
+		dataSize -= nInstBytes;
+		iField++;	
+	}
+
+	return targetField;
+}
+
+/*
+ * HFAPolyline
+ *
+ * Constructor for HFAPolyline
+ *
+ */
+HFAPolyline::HFAPolyline(HFAEntry* node):HFAGeom(node){
+	string COORD_FIELD_NAME = "coords";
+
+	GByte* data = node->GetData();
+	GInt32 dataPos = node->GetDataPos();
+	GInt32 dataSize = node->GetDataSize();
+
+	HFAField* polyCoords = get_field(node->GetPoType(), 
+			COORD_FIELD_NAME, data, dataPos, dataSize);
+
+	// mem offset for "o" dtype
+	void* pReturn;
+	polyCoords->ExtractInstValue(NULL, 0, data, dataPos, dataSize, 'p', &pReturn);
+	int nByteOffset = ((GByte *) pReturn) - data;
+	data += nByteOffset;
+	dataPos += nByteOffset;
+	dataSize -= nByteOffset;
+
+	HFAField* vectCoords = get_field(polyCoords->poItemObjectType, 
+			COORD_FIELD_NAME, data, dataPos, dataSize);	
+	
+	// retrieve BASEDATA meta and matrix values
+        GInt32 nRows, nColumns;
+	GInt16 nBaseItemType;
+    
+        memcpy( &nRows, data+8, 4 );
+        HFAStandard( 4, &nRows );
+        memcpy( &nColumns, data+12, 4 );
+        HFAStandard( 4, &nColumns );
+        memcpy( &nBaseItemType, data+16, 2 );
+        HFAStandard( 2, &nBaseItemType );
+	
+	for (int r=0; r < nRows; r++) {
+		pair<double, double> coord;
+		double x, y;
+		vectCoords->ExtractInstValue(NULL, r*nRows+0, data, dataPos, dataSize, 'd', &x);
+		vectCoords->ExtractInstValue(NULL, r*nRows+1, data, dataPos, dataSize, 'd', &y);
+		coord = make_pair(x,y);
+
+		pts.push_back(coord);
+	}
 }
 
 /*
@@ -327,7 +440,9 @@ void HFAAnnotationLayer::write_to_shp (const char* driverName, char* ofilename) 
 
 		if ((*gtIt) == 10) {
 			lgeomType = wkbPoint;
-		} else {
+		} else if ((*gtIt) == 16){
+			lgeomType = wkbLineString;
+		}else {
 			lgeomType = wkbPolygon;
 		}
 

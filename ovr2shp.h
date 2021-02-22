@@ -20,6 +20,8 @@ bool extract_proj (HFAHandle hHFA, OGRSpatialReference& srs);
 
 string to_polyWKT (vector<pair<double, double>> pts);
 
+string to_linestrWKT (vector<pair<double, double>> pts);
+
 vector<pair<double, double>> rotate (vector<pair<double, double>> pts, double* center, double orientation);
 
 /*
@@ -162,12 +164,35 @@ class HFARectangle: public HFAGeom {
 };
 
 /*
- * TODO
+ * 
  * HFAPolyline
  * 
  * Subclass of HFAGeom for "Polyline2" node types
  *
  */
+class HFAPolyline: public HFAGeom {
+	vector<pair<double, double>> pts;
+	
+	public:
+		HFAPolyline(HFAEntry* node);
+
+		string to_wkt() const { 
+			return to_linestrWKT(get_pts()); 
+		}
+
+		vector<pair<double, double>> get_pts() const { return pts; }
+
+		ostream& write (ostream &os) const override{
+			vector<pair<double, double>> pts = get_pts();
+			vector<pair<double, double>>::iterator it;
+			for (it = pts.begin(); it != pts.end(); ++it) {
+				pair<double, double> pt = *it;
+				os << "(" << pt.first << ", " << pt.second << ")" << endl;		
+			}
+
+			return os;
+		}
+};
 
 /*
  * HFAText
@@ -196,7 +221,6 @@ class HFAText: public HFAGeom {
 
 			return os;
 		}
-
 };
 
 
@@ -392,4 +416,15 @@ class HFARectangleFactory: public HFAGeomFactory {
 class HFATextFactory: public HFAGeomFactory {
 	public:
 		HFAText* create(HFAEntry* node) { return new HFAText(node); }
+};
+
+/*
+ * HFAPolyline
+ *
+ * Factory for HFA Polyline geometry nodes
+ *
+ */
+class HFAPolylineFactory: public HFAGeomFactory {
+	public:
+		HFAPolyline* create(HFAEntry* node) { return new HFAPolyline(node); }
 };
