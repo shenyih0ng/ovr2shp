@@ -2,10 +2,14 @@
 #include <vector>
 
 #include "ovr2shp.h"
+
+#ifdef GPLOT
 #include "gnuplot-iostream.h" // gnuplot
+#endif
 
 using namespace std;
 
+#ifdef GPLOT
 /*
  * Helper sort functions for plotting
  *
@@ -56,6 +60,7 @@ void plot (vector<HFAAnnotation*> annotations, int buffer=1) {
 	g << "set key outside\n";
 	g << cmd << endl;	
 }
+#endif
 
 int main (int argc, char* argv[]) {
 	bool display = false, displayTree = false, plotAnno = false, userDefinedSRS = false, writeOutput = false;	
@@ -134,7 +139,11 @@ int main (int argc, char* argv[]) {
 	// Plot annotation geometries/shapes
 	if (plotAnno) {
 		vector<HFAAnnotation*> annotations = hfaal->get_annos();
+		#ifdef GPLOT
 		plot(annotations);
+		#else
+		cout << "[warn] gnuplot is not included in the build" << endl;
+		#endif
 	}	
 	
 	return 1;

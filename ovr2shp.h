@@ -4,7 +4,6 @@
 #include <stdio.h>
 #include <iostream>
 
-#define GDAL_INCLUDED
 #include "ogrsf_frmts.h" // GDAL vector drivers
 #include "hfa_p.h"
 
@@ -32,7 +31,6 @@ vector<pair<double, double>> rotate (vector<pair<double, double>> pts, double* c
  * Caveats:
  * - HFAGeom is meant for HFA geometry/shape related nodes that shares "center"/"origin"&"orientation" data member
  *   *hence, it currently only supports "Rectangle2", "Eant_Ellipse", "Text2"
- * - it only keeps track of data fields of type "d"(double)
  *
  */
 class HFAGeom {
