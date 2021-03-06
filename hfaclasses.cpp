@@ -212,6 +212,13 @@ HFAField* get_field (HFAType* ntype, string tFieldName, GByte*& data, GInt32& da
  * HFAPolyline
  *
  * Constructor for HFAPolyline
+ * BASEDATA Matrix
+ * [
+ * 	[x1,y1],
+ * 	[x2,y2],
+ * 	[x3,y3]
+ * ]
+ * shape: 3x2 (<BASEDATA nColumns> x <BASEDATA nRows>)
  *
  */
 HFAPolyline::HFAPolyline(HFAEntry* node):HFAGeom(node){
@@ -246,11 +253,12 @@ HFAPolyline::HFAPolyline(HFAEntry* node):HFAGeom(node){
         memcpy( &nBaseItemType, data+16, 2 );
         HFAStandard( 2, &nBaseItemType );
 	
-	for (int r=0; r < nRows; r++) {
+	for (int r=0; r < nColumns; r++) {
 		pair<double, double> coord;
 		double x, y;
-		vectCoords->ExtractInstValue(NULL, r*nRows+0, data, dataPos, dataSize, 'd', &x);
-		vectCoords->ExtractInstValue(NULL, r*nRows+1, data, dataPos, dataSize, 'd', &y);
+		// assume that nRows == 2
+		vectCoords->ExtractInstValue(NULL, r*nColumns+0, data, dataPos, dataSize, 'd', &x);
+		vectCoords->ExtractInstValue(NULL, r*nColumns+1, data, dataPos, dataSize, 'd', &y);
 		coord = make_pair(x,y);
 
 		pts.push_back(coord);

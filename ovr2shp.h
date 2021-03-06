@@ -161,15 +161,15 @@ class HFARectangle: public HFAGeom {
 		}
 };
 
-/*
- * 
+/* 
  * HFAPolyline
  * 
  * Subclass of HFAGeom for "Polyline2" node types
  *
  */
 class HFAPolyline: public HFAGeom {
-	vector<pair<double, double>> pts;
+	protected:
+		vector<pair<double, double>> pts;
 	
 	public:
 		HFAPolyline(HFAEntry* node);
@@ -191,6 +191,27 @@ class HFAPolyline: public HFAGeom {
 			return os;
 		}
 };
+
+/*
+ * HFAPolygon
+ *
+ * [WARNING] untested due to lack of data
+ *
+ * Subclass of HFAPolyline for "Polygon2" node type
+ *
+ */
+class HFAPolygon: public HFAPolyline  {
+	public:
+		HFAPolygon(HFAEntry* node):HFAPolyline(node){
+			// enclose line to turn it into a polygon
+			pts.push_back(pts[0]);
+		};
+
+		string to_wkt() const {
+			return to_polyWKT(get_pts());
+		}
+};
+
 
 /*
  * HFAText
@@ -425,4 +446,15 @@ class HFATextFactory: public HFAGeomFactory {
 class HFAPolylineFactory: public HFAGeomFactory {
 	public:
 		HFAPolyline* create(HFAEntry* node) { return new HFAPolyline(node); }
+};
+
+/*
+ * HFAPolygon
+ *
+ * Factory for HFA Polygon geometry nodes
+ *
+ */
+class HFAPolygonFactory: public HFAGeomFactory {
+	public:
+		HFAPolygon* create(HFAEntry* node) { return new HFAPolygon(node); }
 };
