@@ -29,7 +29,7 @@ const map<int, const char*> HFA_GEOM_MAPPING = {
 /*
  * rotate [utility]
  *
- * rotate clockwise a (x, y) vector by a specified rad angle
+ * rotate anti-clockwise a (x, y) vector by a specified rad angle
  *
  * @param coord	pair<double, double> vector coordinates
  * @param rad   double  rotation angle
@@ -40,8 +40,8 @@ pair<double, double> rotate (pair<double, double> coord,  double rad) {
 	double costheta = cos(rad);
 	double sintheta = sin(rad);
 
-	return make_pair(costheta*coord.first + sintheta*coord.second, 
-			costheta*coord.second - sintheta*coord.first);
+	return make_pair(costheta*coord.first - sintheta*coord.second, 
+			costheta*coord.second + sintheta*coord.first);
 }
 
 template <typename T, typename U>
