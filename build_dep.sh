@@ -2,7 +2,7 @@
 
 BLDDIR=`pwd`
 CPPC=g++
-CFLAGS="-O -I$BLDDIR/hfa"
+CFLAGS="-g -O -I$BLDDIR/hfa"
 
 LINK=g++
 XTRALIBS="-lm -lpthread"

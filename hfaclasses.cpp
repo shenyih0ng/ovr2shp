@@ -26,6 +26,22 @@ const map<int, const char*> HFA_GEOM_MAPPING = {
 	{16, "EANT_POLYLINE"}
 };
 
+template <typename T, typename U>
+pair<T,U> operator-(const pair<T,U>& l, double* r) {
+	return {l.first - r[0], l.second - r[1]};
+}
+
+template <typename T, typename U>
+pair<T,U> operator+(const pair<T,U>& l, double* r) {
+	return {l.first + r[0], l.second + r[1]};
+}
+
+/************************************************************************/
+/*                                                                      */
+/*                           Utility Functions                          */
+/*                                                                      */
+/************************************************************************/
+
 /*
  * rotate [utility]
  *
@@ -44,18 +60,8 @@ pair<double, double> rotate (pair<double, double> coord,  double rad) {
 			costheta*coord.second + sintheta*coord.first);
 }
 
-template <typename T, typename U>
-pair<T,U> operator-(const pair<T,U>& l, double* r) {
-	return {l.first - r[0], l.second - r[1]};
-}
-
-template <typename T, typename U>
-pair<T,U> operator+(const pair<T,U>& l, double* r) {
-	return {l.first + r[0], l.second + r[1]};
-}
-
 /*
- * rotate
+ * rotate [utility]
  *
  * @return vector<pair<double, double>> orientated points
  */
@@ -67,7 +73,105 @@ vector<pair<double, double>> rotate(vector<pair<double, double>> pts, double* ce
 		pair<double, double> vect_coord = rotate(*it - center, orientation) + center;
 		orientated.push_back(vect_coord);
 	}
+
 	return orientated;
+}
+
+/*
+ * get_field [utility]
+ *
+ * Traverse down HFAType structure to get requested HFAField while incrementing memory/data offset
+ *
+ * @param ntype		HFAType*
+ * @param tFieldName	string		query field name
+ * @params
+ * 	data
+ * 	dataPos
+ * 	dataSize
+ * @returns HFAField*
+ */
+HFAField* get_field (HFAType* ntype, string tFieldName, GByte*& data, GInt32& dataPos, GInt32& dataSize) {
+	HFAField* targetField;	
+
+	int iField = 0;
+	HFAField* currField;
+	while (iField < ntype->nFields) {
+		currField = ntype->papoFields[iField];	
+		char* fieldName = currField->pszFieldName;
+		if (fieldName == tFieldName) {
+			targetField = currField;
+			break;
+		};
+
+		int nInstBytes = currField->GetInstBytes(data);
+		data += nInstBytes;
+		dataPos += nInstBytes;
+		dataSize -= nInstBytes;
+		iField++;	
+	}
+
+	return targetField;
+}
+
+/*
+ * find [utility]
+ *
+ * Retrieve HFA node of specified name using recursive search
+ *
+ * @param node 	HFAEntry* start node
+ * @param name  string target name
+ *
+ * @return HFAEntry* HFAEntry of specified name
+ *
+ */
+HFAEntry* find (HFAEntry* node, string name) {
+	if(node->GetName() == name) {
+		return node;
+	}
+	
+	HFAEntry* tgNode = NULL;
+
+	if (node->GetChild() != NULL) {
+		tgNode = find(node->GetChild(), name);
+		if (tgNode != NULL) {
+			return tgNode;
+		}
+	}
+
+	if (node->GetNext() != NULL) {
+		tgNode = find(node->GetNext(), name);
+		if (tgNode != NULL) {
+			return tgNode;
+		}
+	}
+
+	return NULL;
+}
+
+/*
+ * find_eants [utility]
+ *
+ * Find all Eants that currently supported
+ *
+ * @param eant 		HFAEntry*	 	start node (first child of ElementList)
+ * @param tgEants	vector<HFAEntry*>&	collection of extracted Eants that are supported
+ *
+ */
+void find_eants (HFAEntry* eant, vector<HFAEntry*>& tgEants) {
+	eant->LoadData();
+	int elmType = eant->GetIntField("elmType");
+
+	if (elmType != 0 && HFA_GEOM_FACTORIES.find(elmType) != HFA_GEOM_FACTORIES.end()) {
+		tgEants.push_back(eant);		
+	}
+
+	if (eant->GetChild() != NULL) {
+		find_eants(eant->GetChild(), tgEants);
+	}	
+
+	if (eant->GetNext() != NULL) {
+		find_eants(eant->GetNext(), tgEants);
+	}
 }
 
 /*
@@ -118,10 +222,15 @@ string to_linestrWKT (vector<pair<double, double>> pts) {
 	return wkt;
 }
 
+/************************************************************************/
+/*                                                                      */
+/*                              HFAEllipse                              */
+/*                                                                      */
+/************************************************************************/
+
 /*
- * HFAEllipse
- *
  * get_unorientated_pts
+ *
  * - discretizes ellipse to polygon without rotation
  *
  * @returns vector<pair<double, double>>
@@ -129,7 +238,6 @@ string to_linestrWKT (vector<pair<double, double>> pts) {
 vector<pair<double, double>> HFAEllipse::get_unorientated_pts () const {
 	vector<pair<double, double>> pts;
 
-	double* center = get_center();	
 	int seg = max((int)floor(sqrt(((semiMajorAxis + semiMinorAxis) / 2) * 20)), 8);
 	double shift = (44/7.0f)/seg; // (44/7) -> approx of 2pi
 	double theta = 0.0; 
@@ -138,15 +246,20 @@ vector<pair<double, double>> HFAEllipse::get_unorientated_pts () const {
 	    pts.push_back(make_pair(center[0]+(semiMajorAxis*cos(theta)),
 				    center[1]+(semiMinorAxis*sin(theta))));
 	} 
-
 	pts.push_back(pts[0]);
+
 	return pts;
 }
 
-/*
- * HFARectangle
- *
+/************************************************************************/
+/*                                                                      */
+/*                             HFARectangle                             */
+/*                                                                      */
+/************************************************************************/
+
+/* 
  * get_unorientated_points
+ *
  * - get the 4 unorientated corners of the rectangle
  * - follows LinearRing coordinate standard (first and last coordinates are the same)
  *
@@ -154,7 +267,7 @@ vector<pair<double, double>> HFAEllipse::get_unorientated_pts () const {
  */
 vector<pair<double, double>> HFARectangle::get_unorientated_pts() const {
 	vector<pair<double, double>> pts;
-	double* center = get_center();
+
 	int ydir[2] = {1, -1};
 	int xdir[2] = {-1, 1};
 	for (int i = 0; i <= 1; i++) {
@@ -168,50 +281,19 @@ vector<pair<double, double>> HFARectangle::get_unorientated_pts() const {
 		xdir[0] = temp;
 	}
 	pts.push_back(pts[0]);
-	return pts;	
 
+	return pts;
 }
 
-/*
- * get_field [utility]
- *
- * Traverse down HFAType structure to get requested HFAField while incrementing memory/data offset
- *
- * @param ntype		HFAType*
- * @param tFieldName	string		query field name
- * @params
- * 	data
- * 	dataPos
- * 	dataSize
- * @returns HFAField*
- */
-HFAField* get_field (HFAType* ntype, string tFieldName, GByte*& data, GInt32& dataPos, GInt32& dataSize) {
-	HFAField* targetField;	
-
-	int iField = 0;
-	HFAField* currField;
-	while (iField < ntype->nFields) {
-		currField = ntype->papoFields[iField];	
-		char* fieldName = currField->pszFieldName;
-		if (fieldName == tFieldName) {
-			targetField = currField;
-			break;
-		};
-
-		int nInstBytes = currField->GetInstBytes(data);
-		data += nInstBytes;
-		dataPos += nInstBytes;
-		dataSize -= nInstBytes;
-		iField++;	
-	}
-
-	return targetField;
-}
+/************************************************************************/
+/*                                                                      */
+/*                              HFAPolyline                             */
+/*                                                                      */
+/************************************************************************/
 
 /*
- * HFAPolyline
- *
  * Constructor for HFAPolyline
+ *
  * BASEDATA Matrix
  * [
  * 	[x1,y1],
@@ -221,7 +303,7 @@ HFAField* get_field (HFAType* ntype, string tFieldName, GByte*& data, GInt32& da
  * shape: 3x2 (<BASEDATA nColumns> x <BASEDATA nRows>)
  *
  */
-HFAPolyline::HFAPolyline(HFAEntry* node):HFAGeom(node){
+HFAPolyline::HFAPolyline(HFAEntry* node){
 	string COORD_FIELD_NAME = "coords";
 
 	GByte* data = node->GetData();
@@ -265,73 +347,17 @@ HFAPolyline::HFAPolyline(HFAEntry* node):HFAGeom(node){
 	}
 }
 
-/*
- * find [utility]
- *
- * Retrieve HFA node of specified name using recursive search
- *
- * @param node 	HFAEntry* start node
- * @param name  string target name
- *
- * @return HFAEntry* HFAEntry of specified name
- *
- */
-HFAEntry* find (HFAEntry* node, string name) {
-	if(node->GetName() == name) {
-		return node;
-	}
-	
-	HFAEntry* tgNode = NULL;
-
-	if (node->GetChild() != NULL) {
-		tgNode = find(node->GetChild(), name);
-		if (tgNode != NULL) {
-			return tgNode;
-		}
-	}
-
-	if (node->GetNext() != NULL) {
-		tgNode = find(node->GetNext(), name);
-		if (tgNode != NULL) {
-			return tgNode;
-		}
-	}
-
-	return NULL;
-}
+/************************************************************************/
+/*                                                                      */
+/*                           HFAAnnotationLayer                         */
+/*                                                                      */
+/************************************************************************/
 
 /*
- * find_eants
- *
- * Find all Eants that currently supported
- *
- * @param eant 		HFAEntry*	 	start node (first child of ElementList)
- * @param tgEants	vector<HFAEntry*>&	collection of extracted Eants that are supported
- *
- */
-void find_eants (HFAEntry* eant, vector<HFAEntry*>& tgEants) {
-	eant->LoadData();
-	int elmType = eant->GetIntField("elmType");
-
-	if (elmType != 0 && HFA_GEOM_FACTORIES.find(elmType) != HFA_GEOM_FACTORIES.end()) {
-		tgEants.push_back(eant);		
-	}
-
-	if (eant->GetChild() != NULL) {
-		find_eants(eant->GetChild(), tgEants);
-	}	
-
-	if (eant->GetNext() != NULL) {
-		find_eants(eant->GetNext(), tgEants);
-	}
-}
-
-/*
- * HFAAnnotationLayer()
- *
- * Constructs an HFAAnnotationLayer from HFAHandle
+ * Constructor for HFAAnnotationLayer
  *
  * @param handle   HFAHandle HFA File Handle
+ *
  */
 HFAAnnotationLayer::HFAAnnotationLayer(HFAHandle hHFA) {
 	hasSRS = extract_proj(hHFA, srs);
@@ -366,13 +392,42 @@ HFAAnnotationLayer::HFAAnnotationLayer(HFAHandle hHFA) {
 }
 
 /*
- * HFAAnnotationLayer
+ * Insertion operator overload
  *
+ */
+ostream& operator<<(ostream& os, const HFAAnnotationLayer& hal) {
+	if (hal.hasSRS) {
+		const char* srsDisplayOptions[] = {"FORMAT=WKT2_2018", "MULTILINE=YES", nullptr};
+		char* wkt = nullptr;
+		hal.srs.exportToWkt(&wkt, srsDisplayOptions);	
+		os << wkt << endl;
+		CPLFree(wkt);
+	}
+
+	vector<HFAAnnotation*> annos = hal.get_annos();
+	vector<HFAAnnotation*>::const_iterator it;
+	cout << "num_annos: " << annos.size() << endl;
+	for (it = annos.begin(); it != annos.end(); ++it) {
+		HFAAnnotation* anno = *it;
+		os << *anno << endl;
+	}
+	
+	set<int>::const_iterator sIt;
+	os << "geomTypes: ";
+	for (sIt = hal.geomTypes.begin(); sIt != hal.geomTypes.end(); ++sIt) {
+		os << (*sIt) << " ";
+	}
+	os << endl;	
+
+	return os;	
+}
+
+/*
  * display_HFATree
  *
  * Tree view of HFA structure
  * - displays the name, dtype and size of HFA nodes
- * - seg fault occurs when trying to recursively display StyleLibrary //TODO
+ * - TODO seg fault occurs when trying to recursively display StyleLibrary
  *
  * @param node 		HFAEntry* start node
  * @param nIdent	int	  indentation prefix
@@ -408,9 +463,8 @@ void HFAAnnotationLayer::display_HFATree(HFAEntry* node, int nIdent) {
 }
 
 /*
- * HFAAnnotationLayer
- *
  * write_to_shp
+ *
  * - write/export HFAAnnotationLayer to ShapeFile (.shp)
  *
  * Caveats
@@ -419,6 +473,7 @@ void HFAAnnotationLayer::display_HFATree(HFAEntry* node, int nIdent) {
  *
  * @param driverName	const char* 	GDAL vector driver name
  * @param ofilename	string		Output file name/path
+ *
  */
 void HFAAnnotationLayer::write_to_shp (const char* driverName, char* ofilename) {
 	GDALDriver* driver = GetGDALDriverManager()->GetDriverByName(driverName);
