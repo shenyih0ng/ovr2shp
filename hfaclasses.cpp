@@ -5,6 +5,11 @@
 
 using namespace std;
 
+extern const string HFA_POLYLINE_COORDS_ATTR_NAME = "coords";
+extern const string HFA_ANNOTATION_XFORM_ATTR_NAME = "xformMatrix";
+extern const string HFA_XFORM_COEF_ATTR_NAME = "polycoefmtx";
+extern const string HFA_XFORM_VECT_ATTR_NAME = "polycoefvector";
+
 /*
  * HFA_GEOM_FACTORIES
  *
@@ -109,8 +114,49 @@ HFAField* get_field (HFAType* ntype, string tFieldName, GByte*& data, GInt32& da
 		dataSize -= nInstBytes;
 		iField++;	
 	}
+	
+	if (targetField-> chItemType == 'o') {
+		// offset for 'o' item type
+		void* pReturn;
+		targetField->ExtractInstValue(NULL, 0, data, dataPos, dataSize, 'p', &pReturn);
+
+		int nByteOffset = ((GByte *) pReturn) - data;
+		data += nByteOffset;
+		dataPos += nByteOffset;
+		dataSize -= nByteOffset;
+	}
 
 	return targetField;
+}
+
+/*
+ * get_matrix [utility]
+ *
+ * Extract BASEDATA matrix from HFAField 
+ *
+ * TODO docs
+ *
+ */
+vector<double> get_matrix (HFAField* hf, GByte* data, GInt32 dataPos, GInt32 dataSize) {
+        GInt32 nRows, nColumns;
+	GInt16 nBaseItemType;
+   	
+       	// extract BASEDATA meta	
+        memcpy( &nRows, data+8, 4 );
+        HFAStandard( 4, &nRows );
+        memcpy( &nColumns, data+12, 4 );
+        HFAStandard( 4, &nColumns );
+        memcpy( &nBaseItemType, data+16, 2 );
+        HFAStandard( 2, &nBaseItemType );
+	
+	vector<double> pts;	
+	for (int idx=0; idx < nColumns*nRows; idx++) {
+		double _val;
+		hf->ExtractInstValue(NULL, idx, data, dataPos, dataSize, 'd', &_val);
+		pts.push_back(_val);
+	}
+
+	return pts;
 }
 
 /*
@@ -257,6 +303,17 @@ vector<pair<double, double>> HFAEllipse::get_unorientated_pts () const {
 /*                                                                      */
 /************************************************************************/
 
+HFARectangle::HFARectangle(HFAEntry* node) {
+	center = new double[2];
+	center[0] = node -> GetDoubleField("center.x");
+	center[1] = node -> GetDoubleField("center.y");
+
+	rotation = node->GetDoubleField("orientation");
+
+	width = node->GetDoubleField("width");
+	height = node->GetDoubleField("height");
+}
+
 /* 
  * get_unorientated_points
  *
@@ -304,46 +361,72 @@ vector<pair<double, double>> HFARectangle::get_unorientated_pts() const {
  *
  */
 HFAPolyline::HFAPolyline(HFAEntry* node){
-	string COORD_FIELD_NAME = "coords";
-
 	GByte* data = node->GetData();
 	GInt32 dataPos = node->GetDataPos();
 	GInt32 dataSize = node->GetDataSize();
 
 	HFAField* polyCoords = get_field(node->GetPoType(), 
-			COORD_FIELD_NAME, data, dataPos, dataSize);
-
-	// mem offset for "o" dtype
-	void* pReturn;
-	polyCoords->ExtractInstValue(NULL, 0, data, dataPos, dataSize, 'p', &pReturn);
-	int nByteOffset = ((GByte *) pReturn) - data;
-	data += nByteOffset;
-	dataPos += nByteOffset;
-	dataSize -= nByteOffset;
+			HFA_POLYLINE_COORDS_ATTR_NAME, data, dataPos, dataSize);
 
 	HFAField* vectCoords = get_field(polyCoords->poItemObjectType, 
-			COORD_FIELD_NAME, data, dataPos, dataSize);	
+			HFA_POLYLINE_COORDS_ATTR_NAME, data, dataPos, dataSize);	
 	
-	// retrieve BASEDATA meta and matrix values
-        GInt32 nRows, nColumns;
-	GInt16 nBaseItemType;
-    
-        memcpy( &nRows, data+8, 4 );
-        HFAStandard( 4, &nRows );
-        memcpy( &nColumns, data+12, 4 );
-        HFAStandard( 4, &nColumns );
-        memcpy( &nBaseItemType, data+16, 2 );
-        HFAStandard( 2, &nBaseItemType );
-	
-	for (int r=0; r < nColumns; r++) {
-		pair<double, double> coord;
-		double x, y;
-		// assume that nRows == 2
-		vectCoords->ExtractInstValue(NULL, r*nColumns+0, data, dataPos, dataSize, 'd', &x);
-		vectCoords->ExtractInstValue(NULL, r*nColumns+1, data, dataPos, dataSize, 'd', &y);
-		coord = make_pair(x,y);
+	vector<double> coordsMtx = get_matrix(vectCoords, data, dataPos, dataSize);
+	for (int i = 0; i < coordsMtx.size(); i+=2) {
+		pts.push_back(make_pair(coordsMtx[i], coordsMtx[i+1]));
+	}	
+}
 
-		pts.push_back(coord);
+/************************************************************************/
+/*                                                                      */
+/*                             HFAAnnotation                            */
+/*                                                                      */
+/************************************************************************/
+
+/*
+ * Constructor for HFAAnnotation
+ *
+ */
+HFAAnnotation::HFAAnnotation (HFAEntry* node) {
+	name = node->GetStringField("name");
+	description = node->GetStringField("description");  
+	elmType = node->GetStringField("elmType");
+	elmTypeId = node->GetIntField("elmType");
+
+	// get xform matrix
+	GByte* data = node->GetData();
+	GInt32 dataPos = node->GetDataPos();
+	GInt32 dataSize = node->GetDataSize();
+
+	HFAField* xformMatrix = get_field(node->GetPoType(),
+			HFA_ANNOTATION_XFORM_ATTR_NAME, data, dataPos, dataSize);
+	
+	// copy
+	GByte* _data = data;
+	GInt32 _dataPos = dataPos;
+	GInt32 _dataSize = dataSize;
+
+	HFAField* polyVect = get_field(xformMatrix->poItemObjectType,
+			HFA_XFORM_VECT_ATTR_NAME, data, dataPos, dataSize);
+	vector<double> vects = get_matrix(polyVect, data, dataPos, dataSize);
+
+	if (vects.size() == 2) {
+		xform[4] = vects[0];
+		xform[5] = vects[1];
+	} else {
+		cout << "[err] unexpected xform.polycoefvect size of " << vects.size() << endl;
+	}
+
+	HFAField* polyCoef = get_field(xformMatrix->poItemObjectType,
+			HFA_XFORM_COEF_ATTR_NAME, _data, _dataPos, _dataSize);
+	vector<double> coefs = get_matrix(polyCoef, _data, _dataPos, _dataSize);
+
+	if (coefs.size() == 4) {
+		for (int i = 0; i < 4; i++) {
+			xform[i] = coefs[i];
+		}
+	} else {
+		cout << "[err] unexpected xform.polycoefmtx size of " << coefs.size() << endl;
 	}
 }
 

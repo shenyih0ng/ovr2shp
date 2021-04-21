@@ -10,6 +10,11 @@
 
 using namespace std;
 
+extern const string HFA_POLYLINE_COORDS_ATTR_NAME;
+extern const string HFA_ANNOTATION_XFORM_ATTR_NAME;
+extern const string HFA_XFORM_COEF_ATTR_NAME;
+extern const string HFA_XFORM_VECT_ATTR_NAME;
+
 /*
  * Prototypes
  *
@@ -124,16 +129,7 @@ class HFARectangle: public HFAGeom {
 	vector<pair<double, double>> get_unorientated_pts() const;
 
 	public:
-		HFARectangle (HFAEntry* node) {
-			center = new double[2];
-			center[0] = node -> GetDoubleField("center.x");
-			center[1] = node -> GetDoubleField("center.y");
-
-			rotation = node->GetDoubleField("orientation");
-
-			width = node->GetDoubleField("width");
-			height = node->GetDoubleField("height");
-		};
+		HFARectangle (HFAEntry*);
 
 		double* get_center() { return center; };
 
@@ -266,20 +262,18 @@ class HFAAnnotation {
 	int elmTypeId;
 
 	HFAGeom* geom;
+	double xform[6];
 
 	public:
-		HFAAnnotation (HFAEntry* node) {
-			name = node->GetStringField("name");
-			description = node->GetStringField("description");  
-			elmType = node->GetStringField("elmType");
-			elmTypeId = node->GetIntField("elmType");
-		}
+		HFAAnnotation (HFAEntry*);
 
 		const char* get_name() { return name; };
 
 		const char* get_desc() { return description; };
 
 		const char* get_type() { return elmType; };
+
+		double* get_xform() { return xform; };
 
 		int get_typeId () { return elmTypeId; };
 
@@ -291,7 +285,15 @@ class HFAAnnotation {
 			os << "type: " << ha.elmType << " [" << ha.elmTypeId << "]" << endl;
 			os << "name: " << ((ha.name == NULL) ? "" : ha.name) << endl;
 			os << "description: " << ((ha.description == NULL) ? "" : ha.description) << endl;
-			os << *ha.geom << " ";
+			os << "xform: " << endl;
+			for (int i = 0; i < 6; i+=2) {
+				os << "\t" << ha.xform[i];
+				os << " " << ha.xform[i+1];
+				os << endl;
+			}
+
+			os << endl;
+			os << *ha.geom;
 
 			return os;	
 		}
