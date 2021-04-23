@@ -1,6 +1,6 @@
 CXX := g++
-CXXFLAGS := -lm -lpthread -lgdal 
-CXXFLAGS_GNUPLOT := --std=c++17 ${CXXFLAGS} -lboost_iostreams -lboost_system -lboost_filesystem
+CXXFLAGS := --std=c++17 -lm -lpthread -lgdal 
+CXXFLAGS_GNUPLOT := ${CXXFLAGS} -lboost_iostreams -lboost_system -lboost_filesystem
 INCLUDES := -I./hfa
 
 OBJECTS := ./hfa/*.o ovr2shp.cpp hfaclasses.cpp hfasrs.cpp 

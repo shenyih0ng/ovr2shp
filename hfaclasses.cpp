@@ -475,11 +475,11 @@ void HFAAnnotationLayer::display_HFATree(HFAEntry* node, int nIdent) {
  * @param ofilename	string		Output file name/path
  *
  */
-void HFAAnnotationLayer::write_to_shp (const char* driverName, char* ofilename) {
+bool HFAAnnotationLayer::write_to_shp (const char* driverName, fs::path dst) {
 	GDALDriver* driver = GetGDALDriverManager()->GetDriverByName(driverName);
 	if (driver == NULL) {
-		cout << driverName << " driver not found" << endl;
-		exit(1);
+		cout << "[err] " << driverName << " driver not found" << endl;
+		return false;
 	}
 
 	set<int> gTypes = get_geomTypes();
@@ -490,14 +490,12 @@ void HFAAnnotationLayer::write_to_shp (const char* driverName, char* ofilename) 
 	for (set<int>::iterator gtIt = gTypes.begin(); gtIt != gTypes.end(); ++gtIt) {
 		map<int, const char*>::const_iterator gmapIt = HFA_GEOM_MAPPING.find(*gtIt);
 		const char* geomName = gmapIt->second;
+		
+		fs::path geom_dst = dst;
+		geom_dst += geomName;
+		geom_dst += ".shp";
 
-		string _fileName = ofilename;
-		size_t ldirSep = _fileName.find_last_of('/');
-		string _fileBaseName = _fileName.substr(ldirSep);
-		size_t fextSep = _fileBaseName.find_first_of('.');
-		_fileName.insert(fextSep + ldirSep, geomName);
-
-		GDALDataset* ds = driver->Create(_fileName.c_str(), 0, 0, 0, GDT_Unknown,NULL);
+		GDALDataset* ds = driver->Create(geom_dst.c_str(), 0, 0, 0, GDT_Unknown,NULL);
 		OGRLayer* l;		
 		OGRwkbGeometryType lgeomType;
 
@@ -516,23 +514,23 @@ void HFAAnnotationLayer::write_to_shp (const char* driverName, char* ofilename) 
 		OGRFieldDefn nameField("name", OFTString);
 		nameField.SetWidth(254);
 		if (l->CreateField(&nameField) != OGRERR_NONE) {
-			cout << "failed creating name field" << endl;
-			exit(1);
+			cout << "[err] failed creating name field" << endl;
+			return false;
 		}
 
 		OGRFieldDefn descField("desc", OFTString);
 		descField.SetWidth(254);
 		if (l->CreateField(&descField) != OGRERR_NONE) {
-			cout << "failed creating description field" << endl;
-			exit(1);
+			cout << "[err] failed creating description field" << endl;
+			return false;
 		}
 
 		if ((*gtIt) == 10) {
 			OGRFieldDefn textField("text", OFTString);
 			textField.SetWidth(254);
 			if (l->CreateField(&textField) != OGRERR_NONE) {
-				cout << "failed creating text field" << endl;
-				exit(1);
+				cout << "[err] failed creating text field" << endl;
+				return false;
 			}
 		}
 
@@ -566,7 +564,8 @@ void HFAAnnotationLayer::write_to_shp (const char* driverName, char* ofilename) 
 		feat->SetGeometry(geom);
 
 		if (layers[(*it)->get_typeId()]->CreateFeature(feat) != OGRERR_NONE) {
-			cout << "failed to create feature" << endl;
+			cout << "[err] failed to create feature" << endl;
+			return false;
 		}
 
 		OGRFeature::DestroyFeature(feat);
@@ -575,4 +574,6 @@ void HFAAnnotationLayer::write_to_shp (const char* driverName, char* ofilename) 
 	for (int dsIdx = 0; dsIdx < gTypes.size(); dsIdx++) {	
 		GDALClose(gdalDatasets[dsIdx]);
 	}
+
+	return true;
 }

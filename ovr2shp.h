@@ -4,11 +4,13 @@
 #include <limits>
 #include <stdio.h>
 #include <iostream>
+#include <filesystem>
 
 #include "ogrsf_frmts.h" // GDAL vector drivers
 #include "hfa_p.h"
 
 using namespace std;
+namespace fs = std::filesystem;
 
 /*
  * Prototypes
@@ -320,7 +322,7 @@ class HFAAnnotationLayer {
 
 	void display_HFATree(HFAEntry* node, int nIdent);
 
-	void write_to_shp (const char*, char*);
+	bool write_to_shp (const char*, fs::path);
 
 	public:
 		HFAAnnotationLayer (HFAHandle);
@@ -351,15 +353,16 @@ class HFAAnnotationLayer {
 
 		void add_geomType (int nGeomType) { geomTypes.insert(nGeomType); }
 
-		void to_shp (char* ofilename) {
+		bool to_shp (fs::path dst) {
 			const char* shpDriverName = "ESRI Shapefile";
-			write_to_shp(shpDriverName, ofilename);	
+			return write_to_shp(shpDriverName, dst);	
 		};
 
-		void to_gjson (char* ofilename) {
+		bool to_gjson (char* ofilename) {
 			//TODO  @NotImplemented
 			const char* gjsonDriverName = "GeoJSON";
 			cerr << "GeoJSON is not supported yet!" << endl;
+			return false;
 		};
 
 		void printTree () { display_HFATree(root, 0); }
