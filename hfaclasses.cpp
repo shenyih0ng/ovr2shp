@@ -510,7 +510,13 @@ bool HFAAnnotationLayer::write_to_shp (const char* driverName, fs::path dst) {
 		l = ds->CreateLayer(NULL,((hasSRS == false) ? NULL: new OGRSpatialReference(get_srs())), lgeomType, NULL);
 		
 		// Layer Fields
-		
+
+		OGRFieldDefn eleIdField("eleId", OFTInteger64);
+		if (l->CreateField(&eleIdField) != OGRERR_NONE) {
+			cout << "[err] failed creating eleId field" << endl;
+			return false;
+		}
+			
 		OGRFieldDefn nameField("name", OFTString);
 		nameField.SetWidth(254);
 		if (l->CreateField(&nameField) != OGRERR_NONE) {
@@ -547,6 +553,7 @@ bool HFAAnnotationLayer::write_to_shp (const char* driverName, fs::path dst) {
 		OGRGeometry* geom;
 
 		feat = OGRFeature::CreateFeature(layers[(*it)->get_typeId()]->GetLayerDefn());
+		feat->SetField("eleId", (*it)->get_id());
 		feat->SetField("name", (*it)->get_name());
 		feat->SetField("desc", (*it)->get_desc());
 

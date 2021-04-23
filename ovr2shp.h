@@ -262,6 +262,7 @@ class HFAText: public HFAGeom {
 /************************************************************************/
 
 class HFAAnnotation {
+	int id;
 	const char* name;
 	const char* description;
 	const char* elmType;
@@ -271,11 +272,14 @@ class HFAAnnotation {
 
 	public:
 		HFAAnnotation (HFAEntry* node) {
+			id = node->GetIntField("id");	
 			name = node->GetStringField("name");
 			description = node->GetStringField("description");  
 			elmType = node->GetStringField("elmType");
 			elmTypeId = node->GetIntField("elmType");
 		}
+		
+		int get_id() { return id; };
 
 		const char* get_name() { return name; };
 
@@ -290,6 +294,7 @@ class HFAAnnotation {
 		void set_geom(HFAGeom* g) { geom=g; };
 
 		friend ostream& operator<<(ostream& os, const HFAAnnotation& ha) {
+			os << "id: " << ha.id << endl;
 			os << "type: " << ha.elmType << " [" << ha.elmTypeId << "]" << endl;
 			os << "name: " << ((ha.name == NULL) ? "" : ha.name) << endl;
 			os << "description: " << ((ha.description == NULL) ? "" : ha.description) << endl;
