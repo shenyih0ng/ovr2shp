@@ -41,8 +41,6 @@ string to_linestrWKT (vector<pair<double, double>> pts);
 class HFAGeom {
 	public:
 		virtual ~HFAGeom (){}; // for dynamic_cast
-
-		virtual string to_wkt () const = 0;
 	
 		virtual vector<pair<double, double>> get_pts() const = 0;
 
@@ -52,7 +50,6 @@ class HFAGeom {
 			os.precision(numeric_limits<long double>::digits10 + 1);
 
 			hg.write(os);
-			os << hg.to_wkt() << endl;
 
 			return os;
 		}
@@ -99,10 +96,6 @@ class HFAEllipse: public HFAGeom {
 			return rotate(get_unorientated_pts(), center, rotation);
 		}
 
-		string to_wkt() const { 
-			return to_polyWKT(get_pts());
-		};
-
 		void write (ostream &os) const {
 			os << "center: " << center[0] << ", " << center[1] << endl;
 			os << "rotation: " << rotation << endl;
@@ -143,10 +136,6 @@ class HFARectangle: public HFAGeom {
 			return rotate(get_unorientated_pts(), center, rotation);
 		}
 		
-		string to_wkt () const {
-			return to_polyWKT(get_pts());
-		}
-
 		void write (ostream &os) const {
 			os << "center: " << center[0] << ", " << center[1] << endl;
 			os << "rotation: " << rotation << endl;
@@ -170,10 +159,6 @@ class HFAPolyline: public HFAGeom {
 	public:
 		HFAPolyline(HFAEntry* node);
 
-		string to_wkt() const { 
-			return to_linestrWKT(get_pts()); 
-		}
-
 		void write (ostream &os) const { return; }
 
 		vector<pair<double, double>> get_pts() const { return pts; }
@@ -193,10 +178,6 @@ class HFAPolygon: public HFAPolyline  {
 			// enclose line to turn it into a polygon
 			pts.push_back(pts[0]);
 		};
-
-		string to_wkt() const {
-			return to_polyWKT(get_pts());
-		}
 };
 
 /************************************************************************/
@@ -231,14 +212,6 @@ class HFAText: public HFAGeom {
 			return pts;
 		}
 
-		string to_wkt() const {
-			string wkt = "POINT(";
-			wkt += to_string(origin[0]) + " " + to_string(origin[1]);
-			wkt += ")";
-
-			return wkt;
-		}
-
 		void write (ostream &os) const {
 			os << "origin: " << origin[0] << ", " << origin[1] << endl;
 			os << "textval: " << text << endl;
@@ -262,11 +235,22 @@ class HFAAnnotation {
 	int elmTypeId;
 
 	HFAGeom* geom;
+
+	/*
+	 * coord_vect (1x3)
+	 * {x, y, z}
+	 *
+	 * xform (3x3)
+	 * { xform[0] xform[1], -- coef
+	 *   xform[2] xform[3], -- coef
+	 *   xform[4] xform[5]  -- vect }
+	 *
+	 */
 	double xform[6];
 
 	public:
 		HFAAnnotation (HFAEntry*);
-
+ 
 		const char* get_name() { return name; };
 
 		const char* get_desc() { return description; };
@@ -280,6 +264,10 @@ class HFAAnnotation {
 		HFAGeom* get_geom() { return geom; };
 
 		void set_geom(HFAGeom* g) { geom=g; };
+		
+		vector<pair<double, double>> get_pts() const;
+
+		string get_wkt() const;
 
 		friend ostream& operator<<(ostream& os, const HFAAnnotation& ha) {
 			os << "type: " << ha.elmType << " [" << ha.elmTypeId << "]" << endl;
@@ -291,9 +279,11 @@ class HFAAnnotation {
 				os << " " << ha.xform[i+1];
 				os << endl;
 			}
-
 			os << endl;
+
 			os << *ha.geom;
+			os << ha.get_wkt();
+			os << endl;
 
 			return os;	
 		}

@@ -1,5 +1,6 @@
 #include <set>
 #include <math.h>
+#include <iomanip>
 
 #include "ovr2shp.h"
 
@@ -46,6 +47,86 @@ pair<T,U> operator+(const pair<T,U>& l, double* r) {
 /*                           Utility Functions                          */
 /*                                                                      */
 /************************************************************************/
+
+/*
+ * to_str
+ *
+ * convert double to string with floating-point precision of 20
+ *
+ * @param double val
+ * @return string
+ */
+string to_str (double val) {
+	ostringstream ss;
+	ss << setprecision(20);
+	ss << val;
+
+	return ss.str();
+}
+
+/*
+ * to_ptWKT [utility]
+ *
+ * Construct Point wkt (well-known text) from x,y
+ *
+ * @param  x	 double
+ * @param  y	 double
+ * @return string  point wkt
+ */
+string to_ptWKT (double x, double y) {
+	string wkt = "POINT(";
+	wkt += to_str(x) + " " + to_str(y) + ")";
+
+	return wkt;
+}
+
+/*
+ * to_polyWKT [utility]
+ *
+ * Construct Polygon wkt (well-known text) from points
+ *
+ * @param  pts	 vector<pair<double, double>> 
+ * @return string  polygon wkt
+ */
+string to_polyWKT (vector<pair<double, double>> pts) {
+	string wkt = "POLYGON ((";
+	vector<pair<double, double>>::const_iterator it;
+	for (it = pts.begin(); it != pts.end(); ++it) {
+		pair<double, double> pt = *it;
+		if (it == pts.end() -1) {
+			wkt += to_str(pt.first) + " " + to_str(pt.second);
+			wkt += "))";
+		} else {
+			wkt += to_str(pt.first) + " " + to_str(pt.second) + ", ";
+		}
+	}
+
+	return wkt;
+}
+
+/*
+ * to_linestrWKT [utility]
+ *
+ * Construct LineString wkt (well-known text) from points
+ *
+ * @param  pts	 vector<pair<double, double>> 
+ * @return string  polygon wkt
+ */
+string to_linestrWKT (vector<pair<double, double>> pts) {
+	string wkt = "LINESTRING(";
+	vector<pair<double, double>>::const_iterator it;
+	for (it = pts.begin(); it != pts.end(); ++it) {
+		pair<double, double> pt = *it;
+		if (it == pts.end() -1) {
+			wkt += to_str(pt.first) + " " + to_str(pt.second);
+			wkt += ")";
+		} else {
+			wkt += to_str(pt.first) + " " + to_str(pt.second) + ", ";
+		}
+	}
+
+	return wkt;
+}
 
 /*
  * rotate [utility]
@@ -134,8 +215,12 @@ HFAField* get_field (HFAType* ntype, string tFieldName, GByte*& data, GInt32& da
  *
  * Extract BASEDATA matrix from HFAField 
  *
- * TODO docs
+ * @param hf		HFAField* 
+ * @param data		GByte*
+ * @param dataPos 	GInt32
+ * @param dataSize	GInt32
  *
+ * @return vector<double>  1d representation of BASEDATA matrix
  */
 vector<double> get_matrix (HFAField* hf, GByte* data, GInt32 dataPos, GInt32 dataSize) {
         GInt32 nRows, nColumns;
@@ -218,54 +303,6 @@ void find_eants (HFAEntry* eant, vector<HFAEntry*>& tgEants) {
 	if (eant->GetNext() != NULL) {
 		find_eants(eant->GetNext(), tgEants);
 	}
-}
-
-/*
- * to_polyWKT [utility]
- *
- * Construct Polygon wkt (well-known text) from points
- *
- * @param  pts	 vector<pair<double, double>> 
- * @return string  polygon wkt
- */
-string to_polyWKT (vector<pair<double, double>> pts) {
-	string wkt = "POLYGON ((";
-	vector<pair<double, double>>::const_iterator it;
-	for (it = pts.begin(); it != pts.end(); ++it) {
-		pair<double, double> pt = *it;
-		if (it == pts.end() -1) {
-			wkt += to_string(pt.first) + " " + to_string(pt.second);
-			wkt += "))";
-		} else {
-			wkt += to_string(pt.first) + " " + to_string(pt.second) + ", ";
-		}
-	}
-
-	return wkt;
-}
-
-/*
- * to_linestrWKT [utility]
- *
- * Construct LineString wkt (well-known text) from points
- *
- * @param  pts	 vector<pair<double, double>> 
- * @return string  polygon wkt
- */
-string to_linestrWKT (vector<pair<double, double>> pts) {
-	string wkt = "LINESTRING(";
-	vector<pair<double, double>>::const_iterator it;
-	for (it = pts.begin(); it != pts.end(); ++it) {
-		pair<double, double> pt = *it;
-		if (it == pts.end() -1) {
-			wkt += to_string(pt.first) + " " + to_string(pt.second);
-			wkt += ")";
-		} else {
-			wkt += to_string(pt.first) + " " + to_string(pt.second) + ", ";
-		}
-	}
-
-	return wkt;
 }
 
 /************************************************************************/
@@ -430,6 +467,59 @@ HFAAnnotation::HFAAnnotation (HFAEntry* node) {
 	}
 }
 
+/*
+ * get_pts
+ *
+ * apply transformation matrix on shape coordinates
+ * 
+ * [warning] only tested on Eant_Rectangle
+ *
+ * @return vector<pair<double, double>> transformed shape coordinates
+ *
+ */
+vector<pair<double, double>> HFAAnnotation::get_pts() const {
+	vector<pair<double, double>> tCoords;
+
+	vector<pair<double, double>> geom_coords = geom->get_pts();
+	vector<pair<double, double>>::const_iterator it = geom_coords.begin();
+	for (;it != geom_coords.end(); it++) {
+		double tX = ((*it).first * xform[0]) +
+			((*it).second * xform[2]) +
+			xform[4];
+		double tY = ((*it).first * xform[1]) +
+			((*it).second * xform[3]) +
+			xform[5];
+
+		tCoords.push_back(make_pair(tX, tY));
+	}
+
+	return tCoords;
+}
+
+/*
+ * get_wkt
+ *
+ * @return string WKT of annotation shape
+ *
+ */
+string HFAAnnotation::get_wkt() const {
+	string wkt;
+	vector<pair<double, double>> geom_pts = get_pts();
+	switch(elmTypeId) {
+		case 10:
+			wkt = to_ptWKT(geom_pts[0].first, geom_pts[0].second);
+			break;
+		case 16:
+			wkt = to_linestrWKT(geom_pts);
+			break;
+		default:
+			wkt = to_polyWKT(geom_pts);
+			break;
+	}
+
+	return wkt;
+}
+
 /************************************************************************/
 /*                                                                      */
 /*                           HFAAnnotationLayer                         */
@@ -489,7 +579,7 @@ ostream& operator<<(ostream& os, const HFAAnnotationLayer& hal) {
 
 	vector<HFAAnnotation*> annos = hal.get_annos();
 	vector<HFAAnnotation*>::const_iterator it;
-	cout << "num_annos: " << annos.size() << endl;
+	os << "num_annos: " << annos.size() << endl;
 	for (it = annos.begin(); it != annos.end(); ++it) {
 		HFAAnnotation* anno = *it;
 		os << *anno << endl;
@@ -642,7 +732,7 @@ void HFAAnnotationLayer::write_to_shp (const char* driverName, char* ofilename) 
 			feat->SetField("text", hfaText->get_text());
 		}
 		
-		string wktStr = hfaGeom->to_wkt();
+		string wktStr = (*it)->get_wkt();
 		const char* wkt = wktStr.c_str();
 
 		OGRGeometryFactory::createFromWkt(wkt, NULL, &geom);
