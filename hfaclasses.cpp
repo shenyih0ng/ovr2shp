@@ -1,9 +1,15 @@
 #include <set>
 #include <math.h>
+#include <iomanip>
 
 #include "ovr2shp.h"
 
 using namespace std;
+
+extern const string HFA_POLYLINE_COORDS_ATTR_NAME = "coords";
+extern const string HFA_ANNOTATION_XFORM_ATTR_NAME = "xformMatrix";
+extern const string HFA_XFORM_COEF_ATTR_NAME = "polycoefmtx";
+extern const string HFA_XFORM_VECT_ATTR_NAME = "polycoefvector";
 
 /*
  * HFA_GEOM_FACTORIES
@@ -41,6 +47,86 @@ pair<T,U> operator+(const pair<T,U>& l, double* r) {
 /*                           Utility Functions                          */
 /*                                                                      */
 /************************************************************************/
+
+/*
+ * to_str
+ *
+ * convert double to string with floating-point precision of 20
+ *
+ * @param double val
+ * @return string
+ */
+string to_str (double val) {
+	ostringstream ss;
+	ss << setprecision(20);
+	ss << val;
+
+	return ss.str();
+}
+
+/*
+ * to_ptWKT [utility]
+ *
+ * Construct Point wkt (well-known text) from x,y
+ *
+ * @param  x	 double
+ * @param  y	 double
+ * @return string  point wkt
+ */
+string to_ptWKT (double x, double y) {
+	string wkt = "POINT(";
+	wkt += to_str(x) + " " + to_str(y) + ")";
+
+	return wkt;
+}
+
+/*
+ * to_polyWKT [utility]
+ *
+ * Construct Polygon wkt (well-known text) from points
+ *
+ * @param  pts	 vector<pair<double, double>> 
+ * @return string  polygon wkt
+ */
+string to_polyWKT (vector<pair<double, double>> pts) {
+	string wkt = "POLYGON ((";
+	vector<pair<double, double>>::const_iterator it;
+	for (it = pts.begin(); it != pts.end(); ++it) {
+		pair<double, double> pt = *it;
+		if (it == pts.end() -1) {
+			wkt += to_str(pt.first) + " " + to_str(pt.second);
+			wkt += "))";
+		} else {
+			wkt += to_str(pt.first) + " " + to_str(pt.second) + ", ";
+		}
+	}
+
+	return wkt;
+}
+
+/*
+ * to_linestrWKT [utility]
+ *
+ * Construct LineString wkt (well-known text) from points
+ *
+ * @param  pts	 vector<pair<double, double>> 
+ * @return string  polygon wkt
+ */
+string to_linestrWKT (vector<pair<double, double>> pts) {
+	string wkt = "LINESTRING(";
+	vector<pair<double, double>>::const_iterator it;
+	for (it = pts.begin(); it != pts.end(); ++it) {
+		pair<double, double> pt = *it;
+		if (it == pts.end() -1) {
+			wkt += to_str(pt.first) + " " + to_str(pt.second);
+			wkt += ")";
+		} else {
+			wkt += to_str(pt.first) + " " + to_str(pt.second) + ", ";
+		}
+	}
+
+	return wkt;
+}
 
 /*
  * rotate [utility]
@@ -109,8 +195,53 @@ HFAField* get_field (HFAType* ntype, string tFieldName, GByte*& data, GInt32& da
 		dataSize -= nInstBytes;
 		iField++;	
 	}
+	
+	if (targetField-> chItemType == 'o') {
+		// offset for 'o' item type
+		void* pReturn;
+		targetField->ExtractInstValue(NULL, 0, data, dataPos, dataSize, 'p', &pReturn);
+
+		int nByteOffset = ((GByte *) pReturn) - data;
+		data += nByteOffset;
+		dataPos += nByteOffset;
+		dataSize -= nByteOffset;
+	}
 
 	return targetField;
+}
+
+/*
+ * get_matrix [utility]
+ *
+ * Extract BASEDATA matrix from HFAField 
+ *
+ * @param hf		HFAField* 
+ * @param data		GByte*
+ * @param dataPos 	GInt32
+ * @param dataSize	GInt32
+ *
+ * @return vector<double>  1d representation of BASEDATA matrix
+ */
+vector<double> get_matrix (HFAField* hf, GByte* data, GInt32 dataPos, GInt32 dataSize) {
+        GInt32 nRows, nColumns;
+	GInt16 nBaseItemType;
+   	
+       	// extract BASEDATA meta	
+        memcpy( &nRows, data+8, 4 );
+        HFAStandard( 4, &nRows );
+        memcpy( &nColumns, data+12, 4 );
+        HFAStandard( 4, &nColumns );
+        memcpy( &nBaseItemType, data+16, 2 );
+        HFAStandard( 2, &nBaseItemType );
+	
+	vector<double> pts;	
+	for (int idx=0; idx < nColumns*nRows; idx++) {
+		double _val;
+		hf->ExtractInstValue(NULL, idx, data, dataPos, dataSize, 'd', &_val);
+		pts.push_back(_val);
+	}
+
+	return pts;
 }
 
 /*
@@ -174,54 +305,6 @@ void find_eants (HFAEntry* eant, vector<HFAEntry*>& tgEants) {
 	}
 }
 
-/*
- * to_polyWKT [utility]
- *
- * Construct Polygon wkt (well-known text) from points
- *
- * @param  pts	 vector<pair<double, double>> 
- * @return string  polygon wkt
- */
-string to_polyWKT (vector<pair<double, double>> pts) {
-	string wkt = "POLYGON ((";
-	vector<pair<double, double>>::const_iterator it;
-	for (it = pts.begin(); it != pts.end(); ++it) {
-		pair<double, double> pt = *it;
-		if (it == pts.end() -1) {
-			wkt += to_string(pt.first) + " " + to_string(pt.second);
-			wkt += "))";
-		} else {
-			wkt += to_string(pt.first) + " " + to_string(pt.second) + ", ";
-		}
-	}
-
-	return wkt;
-}
-
-/*
- * to_linestrWKT [utility]
- *
- * Construct LineString wkt (well-known text) from points
- *
- * @param  pts	 vector<pair<double, double>> 
- * @return string  polygon wkt
- */
-string to_linestrWKT (vector<pair<double, double>> pts) {
-	string wkt = "LINESTRING(";
-	vector<pair<double, double>>::const_iterator it;
-	for (it = pts.begin(); it != pts.end(); ++it) {
-		pair<double, double> pt = *it;
-		if (it == pts.end() -1) {
-			wkt += to_string(pt.first) + " " + to_string(pt.second);
-			wkt += ")";
-		} else {
-			wkt += to_string(pt.first) + " " + to_string(pt.second) + ", ";
-		}
-	}
-
-	return wkt;
-}
-
 /************************************************************************/
 /*                                                                      */
 /*                              HFAEllipse                              */
@@ -256,6 +339,17 @@ vector<pair<double, double>> HFAEllipse::get_unorientated_pts () const {
 /*                             HFARectangle                             */
 /*                                                                      */
 /************************************************************************/
+
+HFARectangle::HFARectangle(HFAEntry* node) {
+	center = new double[2];
+	center[0] = node -> GetDoubleField("center.x");
+	center[1] = node -> GetDoubleField("center.y");
+
+	rotation = node->GetDoubleField("orientation");
+
+	width = node->GetDoubleField("width");
+	height = node->GetDoubleField("height");
+}
 
 /* 
  * get_unorientated_points
@@ -304,47 +398,126 @@ vector<pair<double, double>> HFARectangle::get_unorientated_pts() const {
  *
  */
 HFAPolyline::HFAPolyline(HFAEntry* node){
-	string COORD_FIELD_NAME = "coords";
-
 	GByte* data = node->GetData();
 	GInt32 dataPos = node->GetDataPos();
 	GInt32 dataSize = node->GetDataSize();
 
 	HFAField* polyCoords = get_field(node->GetPoType(), 
-			COORD_FIELD_NAME, data, dataPos, dataSize);
-
-	// mem offset for "o" dtype
-	void* pReturn;
-	polyCoords->ExtractInstValue(NULL, 0, data, dataPos, dataSize, 'p', &pReturn);
-	int nByteOffset = ((GByte *) pReturn) - data;
-	data += nByteOffset;
-	dataPos += nByteOffset;
-	dataSize -= nByteOffset;
+			HFA_POLYLINE_COORDS_ATTR_NAME, data, dataPos, dataSize);
 
 	HFAField* vectCoords = get_field(polyCoords->poItemObjectType, 
-			COORD_FIELD_NAME, data, dataPos, dataSize);	
+			HFA_POLYLINE_COORDS_ATTR_NAME, data, dataPos, dataSize);	
 	
-	// retrieve BASEDATA meta and matrix values
-        GInt32 nRows, nColumns;
-	GInt16 nBaseItemType;
-    
-        memcpy( &nRows, data+8, 4 );
-        HFAStandard( 4, &nRows );
-        memcpy( &nColumns, data+12, 4 );
-        HFAStandard( 4, &nColumns );
-        memcpy( &nBaseItemType, data+16, 2 );
-        HFAStandard( 2, &nBaseItemType );
-	
-	for (int r=0; r < nColumns; r++) {
-		pair<double, double> coord;
-		double x, y;
-		// assume that nRows == 2
-		vectCoords->ExtractInstValue(NULL, r*nColumns+0, data, dataPos, dataSize, 'd', &x);
-		vectCoords->ExtractInstValue(NULL, r*nColumns+1, data, dataPos, dataSize, 'd', &y);
-		coord = make_pair(x,y);
+	vector<double> coordsMtx = get_matrix(vectCoords, data, dataPos, dataSize);
+	for (int i = 0; i < coordsMtx.size(); i+=2) {
+		pts.push_back(make_pair(coordsMtx[i], coordsMtx[i+1]));
+	}	
+}
 
-		pts.push_back(coord);
+/************************************************************************/
+/*                                                                      */
+/*                             HFAAnnotation                            */
+/*                                                                      */
+/************************************************************************/
+
+/*
+ * Constructor for HFAAnnotation
+ *
+ */
+HFAAnnotation::HFAAnnotation (HFAEntry* node) {
+	name = node->GetStringField("name");
+	description = node->GetStringField("description");  
+	elmType = node->GetStringField("elmType");
+	elmTypeId = node->GetIntField("elmType");
+
+	// get xform matrix
+	GByte* data = node->GetData();
+	GInt32 dataPos = node->GetDataPos();
+	GInt32 dataSize = node->GetDataSize();
+
+	HFAField* xformMatrix = get_field(node->GetPoType(),
+			HFA_ANNOTATION_XFORM_ATTR_NAME, data, dataPos, dataSize);
+	
+	// copy
+	GByte* _data = data;
+	GInt32 _dataPos = dataPos;
+	GInt32 _dataSize = dataSize;
+
+	HFAField* polyVect = get_field(xformMatrix->poItemObjectType,
+			HFA_XFORM_VECT_ATTR_NAME, data, dataPos, dataSize);
+	vector<double> vects = get_matrix(polyVect, data, dataPos, dataSize);
+
+	if (vects.size() == 2) {
+		xform[4] = vects[0];
+		xform[5] = vects[1];
+	} else {
+		cout << "[err] unexpected xform.polycoefvect size of " << vects.size() << endl;
 	}
+
+	HFAField* polyCoef = get_field(xformMatrix->poItemObjectType,
+			HFA_XFORM_COEF_ATTR_NAME, _data, _dataPos, _dataSize);
+	vector<double> coefs = get_matrix(polyCoef, _data, _dataPos, _dataSize);
+
+	if (coefs.size() == 4) {
+		for (int i = 0; i < 4; i++) {
+			xform[i] = coefs[i];
+		}
+	} else {
+		cout << "[err] unexpected xform.polycoefmtx size of " << coefs.size() << endl;
+	}
+}
+
+/*
+ * get_pts
+ *
+ * apply transformation matrix on shape coordinates
+ * 
+ * [warning] only tested on Eant_Rectangle
+ *
+ * @return vector<pair<double, double>> transformed shape coordinates
+ *
+ */
+vector<pair<double, double>> HFAAnnotation::get_pts() const {
+	vector<pair<double, double>> tCoords;
+
+	vector<pair<double, double>> geom_coords = geom->get_pts();
+	vector<pair<double, double>>::const_iterator it = geom_coords.begin();
+	for (;it != geom_coords.end(); it++) {
+		double tX = ((*it).first * xform[0]) +
+			((*it).second * xform[2]) +
+			xform[4];
+		double tY = ((*it).first * xform[1]) +
+			((*it).second * xform[3]) +
+			xform[5];
+
+		tCoords.push_back(make_pair(tX, tY));
+	}
+
+	return tCoords;
+}
+
+/*
+ * get_wkt
+ *
+ * @return string WKT of annotation shape
+ *
+ */
+string HFAAnnotation::get_wkt() const {
+	string wkt;
+	vector<pair<double, double>> geom_pts = get_pts();
+	switch(elmTypeId) {
+		case 10:
+			wkt = to_ptWKT(geom_pts[0].first, geom_pts[0].second);
+			break;
+		case 16:
+			wkt = to_linestrWKT(geom_pts);
+			break;
+		default:
+			wkt = to_polyWKT(geom_pts);
+			break;
+	}
+
+	return wkt;
 }
 
 /************************************************************************/
@@ -406,7 +579,7 @@ ostream& operator<<(ostream& os, const HFAAnnotationLayer& hal) {
 
 	vector<HFAAnnotation*> annos = hal.get_annos();
 	vector<HFAAnnotation*>::const_iterator it;
-	cout << "num_annos: " << annos.size() << endl;
+	os << "num_annos: " << annos.size() << endl;
 	for (it = annos.begin(); it != annos.end(); ++it) {
 		HFAAnnotation* anno = *it;
 		os << *anno << endl;
@@ -564,7 +737,7 @@ bool HFAAnnotationLayer::write_to_shp (const char* driverName, fs::path dst) {
 			feat->SetField("text", hfaText->get_text());
 		}
 		
-		string wktStr = hfaGeom->to_wkt();
+		string wktStr = (*it)->get_wkt();
 		const char* wkt = wktStr.c_str();
 
 		OGRGeometryFactory::createFromWkt(wkt, NULL, &geom);
