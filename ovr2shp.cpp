@@ -71,11 +71,11 @@ bool validate_ovr (fs::path file_path) {
 	return valid;
 }
 
-bool validate_ro (fs::path file_path) {
+bool validate_rMode (fs::path file_path) {
 	bool valid = !fs::is_directory(file_path) && validate_ovr(file_path);
 	if (!valid) {
-		cout << "[err] invalid source input for read-only(RO) mode" << endl;
-		cout << "\t- RO mode only support single .ovr file" << endl;
+		cout << "[err] invalid source input for READ mode" << endl;
+		cout << "\t- READ mode only support single .ovr file" << endl;
 	}
 
 	return valid;
@@ -159,18 +159,16 @@ int main (int argc, char* argv[]) {
 	     displayTree = false, 
 	     plotAnno = false, 
 	     userDefinedSRS = false, 
-	     readOnly = false,
-	     convertSrc = true;
+	     convertSrc = false;
 
 	const string displayAnnoFlag = "-d",
 	       displayTreeFlag = "-t", 
 	       plotFlag = "-p", 
 	       srsFlag = "-srs", 
-	       outputDirFlag = "-o",
-	       readOnlyFlag = "-ro";
+	       outputDirFlag = "-o";
 
 	char* user_srs = NULL; //proj4
-	fs::path output_dir = "./"; // defaults to current directory
+	fs::path output_dir;
 	fs::path src_path;
 
 	for (int i = 1; i < argc; i++){
@@ -184,28 +182,16 @@ int main (int argc, char* argv[]) {
 			userDefinedSRS = true;
 			i++;
 			user_srs = argv[i];
-		} else if (argv[i] == readOnlyFlag) {
-			convertSrc = false;
-			readOnly = true;
 		} else if (argv[i] == outputDirFlag) {
 			i++;
 			output_dir = argv[i];
+			convertSrc = true;
 		} else if (src_path.empty()) {
 			src_path = argv[i];
 		}
 	}
 
 	GDALAllRegister();
-
-	if (readOnly && is_file_valid(src_path, validate_ro)) {
-		cout << "[info] mode: READ ONLY" << endl;
-		cout << "source file: " << src_path << endl;
-		cout << endl;
-
-		HFAAnnotationLayer* hfaal = open(src_path);
-		
-		display(hfaal, displayAnno, displayTree, plotAnno);
-	}
 	
 	if (convertSrc) {
 		cout << "[info] mode: CONVERT" << endl;
@@ -228,6 +214,14 @@ int main (int argc, char* argv[]) {
 
 			ovr2shp(src_path, output_dir, user_srs);
 		}
+	} else if (is_file_valid(src_path, validate_rMode)) {
+		cout << "[info] mode: READ" << endl;
+		cout << "source file: " << src_path << endl;
+		cout << endl;
+
+		HFAAnnotationLayer* hfaal = open(src_path);
+		
+		display(hfaal, displayAnno, displayTree, plotAnno);
 	}
 	
 	return 0;
