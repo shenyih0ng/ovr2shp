@@ -90,7 +90,8 @@ bool is_file_valid (fs::path file_path, bool (*validate)(fs::path)) {
 	return (*validate)(file_path);
 }
 
-void display (HFAAnnotationLayer* hfaal, bool displayAnno, bool displayTree, bool plotAnno) {
+void display (HFAHandle hHFA, HFAAnnotationLayer* hfaal, 
+		bool displayAnno, bool displayTree, bool displayDict, bool plotAnno) {
 	// Display layer
 	if (displayAnno) {
 		cout << *hfaal << endl;
@@ -99,6 +100,11 @@ void display (HFAAnnotationLayer* hfaal, bool displayAnno, bool displayTree, boo
 	// Display HFA Tree Structure	
 	if (displayTree) { 
 		hfaal->printTree(); 
+	}
+	
+	// Display HFA Data Dictionary
+	if (displayDict) {
+		HFADumpDictionary(hHFA, stdout);
 	}
 	
 	// Plot annotation geometries/shapes
@@ -112,24 +118,16 @@ void display (HFAAnnotationLayer* hfaal, bool displayAnno, bool displayTree, boo
 	}	
 }
 
-HFAAnnotationLayer* open (fs::path file_path) {
-	cout << "[info] opening " << file_path << endl;
-
-	HFAHandle hHFA = HFAOpen(file_path.c_str(), "r");
-	if (hHFA == NULL) {
-		cout << "[error] cannot open " << file_path << endl;	
-		return nullptr;
-	}
-
-	HFAAnnotationLayer* hfaal = new HFAAnnotationLayer(hHFA);
-
-	return hfaal;
-}
-
 void ovr2shp (fs::path file_path, fs::path output_dir, char* user_srs) {
 	cout << "[info] converting " << file_path << " ..." << endl;
 
-	HFAAnnotationLayer* hfaal = open(file_path);
+	HFAHandle hHFA = HFAOpen(file_path.c_str(), "r");
+
+	if (hHFA == NULL) {
+		cout << "[err] failed to open " << file_path << endl;	
+	}
+
+	HFAAnnotationLayer* hfaal = new HFAAnnotationLayer(hHFA);
 
 	if (user_srs != NULL) {
 		hfaal->set_srs(user_srs);
@@ -148,7 +146,7 @@ void ovr2shp (fs::path file_path, fs::path output_dir, char* user_srs) {
 		cout << " -> " << shp_path.parent_path();
 		cout << endl;
 	} else {
-		cout << "[err] failed to convert ";
+		cout << "[err] ✗ failed to convert ";
 		cout << file_path << endl;
 	}
 	cout << endl;
@@ -157,12 +155,14 @@ void ovr2shp (fs::path file_path, fs::path output_dir, char* user_srs) {
 int main (int argc, char* argv[]) {
 	bool displayAnno = false, 
 	     displayTree = false, 
+	     displayDict = false,
 	     plotAnno = false, 
 	     userDefinedSRS = false, 
 	     convertSrc = false;
 
 	const string displayAnnoFlag = "-d",
-	       displayTreeFlag = "-t", 
+	       displayTreeFlag = "-dt", 
+	       displayDictFlag = "-dd",
 	       plotFlag = "-p", 
 	       srsFlag = "-srs", 
 	       outputDirFlag = "-o";
@@ -176,6 +176,8 @@ int main (int argc, char* argv[]) {
 			displayTree = true;
 		} else if (argv[i] == displayAnnoFlag) {
 			displayAnno = true;
+		} else if (argv[i] == displayDictFlag) {
+			displayDict = true;
 		} else if (argv[i] == plotFlag) {
 			plotAnno = true;
 		} else if (argv[i] == srsFlag) {
@@ -192,6 +194,11 @@ int main (int argc, char* argv[]) {
 	}
 
 	GDALAllRegister();
+
+	if (src_path.empty()) {
+		cout << "no input source" << endl;
+		exit(100);
+	}
 	
 	if (convertSrc) {
 		cout << "[info] mode: CONVERT" << endl;
@@ -219,9 +226,14 @@ int main (int argc, char* argv[]) {
 		cout << "source file: " << src_path << endl;
 		cout << endl;
 
-		HFAAnnotationLayer* hfaal = open(src_path);
-		
-		display(hfaal, displayAnno, displayTree, plotAnno);
+		HFAHandle hHFA = HFAOpen(src_path.c_str(), "r");
+		if (hHFA == NULL) {
+			cout << "[err] failed to open " << src_path << endl;	
+		}
+
+		HFAAnnotationLayer* hfaal = new HFAAnnotationLayer(hHFA);
+	
+		display(hHFA, hfaal, displayAnno, displayTree, displayDict, plotAnno);
 	}
 	
 	return 0;
