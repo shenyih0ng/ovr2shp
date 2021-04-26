@@ -425,6 +425,7 @@ HFAPolyline::HFAPolyline(HFAEntry* node){
  *
  */
 HFAAnnotation::HFAAnnotation (HFAEntry* node) {
+	id = node->GetIntField("id");
 	name = node->GetStringField("name");
 	description = node->GetStringField("description");  
 	elmType = node->GetStringField("elmType");

@@ -49,8 +49,6 @@ class HFAGeom {
 		virtual void write(ostream&) const = 0;
 
 		friend ostream& operator<<(ostream& os, const HFAGeom& hg){
-			os.precision(numeric_limits<long double>::digits10 + 1);
-
 			hg.write(os);
 
 			return os;
@@ -279,6 +277,8 @@ class HFAAnnotation {
 			os << "type: " << ha.elmType << " [" << ha.elmTypeId << "]" << endl;
 			os << "name: " << ((ha.name == NULL) ? "" : ha.name) << endl;
 			os << "description: " << ((ha.description == NULL) ? "" : ha.description) << endl;
+
+			os.precision(numeric_limits<long double>::digits10 + 1);
 			os << "xform: " << endl;
 			for (int i = 0; i < 6; i+=2) {
 				os << "\t" << ha.xform[i];
