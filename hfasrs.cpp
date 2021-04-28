@@ -19,7 +19,7 @@ const Eprj_MapInfo* getMapInfo (HFAHandle hHFA) {
 
 	mapInfoEntry = find(hHFA->poRoot, "Map_Info");
 	if (mapInfoEntry == NULL) {
-		cout << "[warn] no mapInfo" << endl;
+		Log(WARN) << "No MapInfo found";
 		return NULL;
 	}
 
@@ -58,7 +58,7 @@ const Eprj_ProParameters* getProjectionParams(HFAHandle hHFA) {
 
 	projEntry = find(hHFA->poRoot, "Projection");
 	if (projEntry == NULL) {
-		cout << "[warn] no proj" << endl;
+		Log(WARN) << "No Projection found";
 		return NULL;
 	}
 
@@ -103,7 +103,7 @@ const Eprj_Datum* getDatum(HFAHandle hHFA) {
 
 	datumEntry = find(hHFA->poRoot, "Datum");
 	if (datumEntry == NULL) {
-		cout << "[warn] no datum" << endl;
+		Log(WARN) << "No Datum found";
 		return NULL;
 	}
 

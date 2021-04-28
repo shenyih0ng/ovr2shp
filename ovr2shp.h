@@ -9,6 +9,8 @@
 #include "ogrsf_frmts.h" // GDAL vector drivers
 #include "hfa_p.h"
 
+#include "logging.h"
+
 using namespace std;
 namespace fs = std::filesystem;
 

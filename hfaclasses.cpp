@@ -452,7 +452,9 @@ HFAAnnotation::HFAAnnotation (HFAEntry* node) {
 		xform[4] = vects[0];
 		xform[5] = vects[1];
 	} else {
-		cout << "[err] unexpected xform.polycoefvect size of " << vects.size() << endl;
+		Log(ERROR) << "unexpected xform.polycoefvect size of "
+			   << vects.size()
+			   << " , expected 2";
 	}
 
 	HFAField* polyCoef = get_field(xformMatrix->poItemObjectType,
@@ -464,7 +466,9 @@ HFAAnnotation::HFAAnnotation (HFAEntry* node) {
 			xform[i] = coefs[i];
 		}
 	} else {
-		cout << "[err] unexpected xform.polycoefmtx size of " << coefs.size() << endl;
+		Log(ERROR) << "unexpected xform.polycoefmtx size of "
+			   << coefs.size()
+			   << " , expected 4";
 	}
 }
 
@@ -535,33 +539,31 @@ string HFAAnnotation::get_wkt() const {
  */
 HFAAnnotationLayer::HFAAnnotationLayer(HFAHandle hHFA) {
 	hasSRS = extract_proj(hHFA, srs);
-	if (!hasSRS) {
-		cerr << "[warn] no map info found/unsupported projections in file" << endl;
-	}
-
-	root = hHFA->poRoot;	
-	HFAEntry* hfaElmList = find(root, "ElementList");
-	
-	if (hfaElmList == NULL) {
-		cout << "[exit] no Eants(annotations) found!" << endl;
-		exit(100);
-	}
+	root = hHFA->poRoot;
 
 	vector<HFAEntry*> elmEants;
-	find_eants(hfaElmList->GetChild(), elmEants);
 
-	vector<HFAEntry*>::iterator it;
-	for (it = elmEants.begin(); it != elmEants.end(); ++it) {
-		HFAAnnotation* hfaA = new HFAAnnotation(*it);
-		map<int, HFAGeomFactory*>::const_iterator gIt = HFA_GEOM_FACTORIES.find(
-				(*it)->GetIntField("elmType"));
-		add_geomType(gIt->first); // add geomtype as metadata of alayer
-		HFAEntry* hfaAGeomChild = (*it)->GetChild();
-		HFAGeomFactory* gFactory = gIt->second;
-		HFAGeom* hfaAGeom = gFactory->create(hfaAGeomChild);
-		hfaA->set_geom(hfaAGeom);
+	HFAEntry* hfaElmList = find(root, "ElementList");
+	if (hfaElmList != NULL) {
+		find_eants(hfaElmList->GetChild(), elmEants);
+	}
 
-		add_anno(hfaA);
+	if (elmEants.empty()) {
+		Log(WARN) << "No annotation elements found";
+	} else {
+		vector<HFAEntry*>::iterator it;
+		for (it = elmEants.begin(); it != elmEants.end(); ++it) {
+			HFAAnnotation* hfaA = new HFAAnnotation(*it);
+			map<int, HFAGeomFactory*>::const_iterator gIt = HFA_GEOM_FACTORIES.find(
+					(*it)->GetIntField("elmType"));
+			add_geomType(gIt->first); // add geomtype as metadata of alayer
+			HFAEntry* hfaAGeomChild = (*it)->GetChild();
+			HFAGeomFactory* gFactory = gIt->second;
+			HFAGeom* hfaAGeom = gFactory->create(hfaAGeomChild);
+			hfaA->set_geom(hfaAGeom);
+
+			add_anno(hfaA);
+		}
 	}
 }
 
@@ -652,7 +654,7 @@ void HFAAnnotationLayer::display_HFATree(HFAEntry* node, int nIdent) {
 bool HFAAnnotationLayer::write_to_shp (const char* driverName, fs::path dst) {
 	GDALDriver* driver = GetGDALDriverManager()->GetDriverByName(driverName);
 	if (driver == NULL) {
-		cout << "[err] " << driverName << " driver not found" << endl;
+		Log(ERROR) << "Cannot find " << driverName << "driver";
 		return false;
 	}
 
@@ -670,6 +672,12 @@ bool HFAAnnotationLayer::write_to_shp (const char* driverName, fs::path dst) {
 		geom_dst += ".shp";
 
 		GDALDataset* ds = driver->Create(geom_dst.c_str(), 0, 0, 0, GDT_Unknown,NULL);
+		if (ds == NULL) {
+			Log(ERROR) << "Unable to create file "
+				   << geom_dst;
+			continue;
+		}
+
 		OGRLayer* l;		
 		OGRwkbGeometryType lgeomType;
 
@@ -687,21 +695,21 @@ bool HFAAnnotationLayer::write_to_shp (const char* driverName, fs::path dst) {
 
 		OGRFieldDefn eleIdField("eleId", OFTInteger64);
 		if (l->CreateField(&eleIdField) != OGRERR_NONE) {
-			cout << "[err] failed creating eleId field" << endl;
+			Log(ERROR) << "Failed to create eleId field in Shapefile";
 			return false;
 		}
 			
 		OGRFieldDefn nameField("name", OFTString);
 		nameField.SetWidth(254);
 		if (l->CreateField(&nameField) != OGRERR_NONE) {
-			cout << "[err] failed creating name field" << endl;
+			Log(ERROR) << "Failed to create name field in Shapefile";
 			return false;
 		}
 
 		OGRFieldDefn descField("desc", OFTString);
 		descField.SetWidth(254);
 		if (l->CreateField(&descField) != OGRERR_NONE) {
-			cout << "[err] failed creating description field" << endl;
+			Log(ERROR) << "Failed to create description field in Shapefile";
 			return false;
 		}
 
@@ -709,7 +717,7 @@ bool HFAAnnotationLayer::write_to_shp (const char* driverName, fs::path dst) {
 			OGRFieldDefn textField("text", OFTString);
 			textField.SetWidth(254);
 			if (l->CreateField(&textField) != OGRERR_NONE) {
-				cout << "[err] failed creating text field" << endl;
+				Log(ERROR) << "Failed to create text field in Shapefile";
 				return false;
 			}
 		}
@@ -745,7 +753,7 @@ bool HFAAnnotationLayer::write_to_shp (const char* driverName, fs::path dst) {
 		feat->SetGeometry(geom);
 
 		if (layers[(*it)->get_typeId()]->CreateFeature(feat) != OGRERR_NONE) {
-			cout << "[err] failed to create feature" << endl;
+			Log(ERROR) << "Failed to create feature in Shapefile";
 			return false;
 		}
 

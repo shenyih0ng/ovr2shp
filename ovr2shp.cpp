@@ -9,6 +9,8 @@
 
 using namespace std;
 
+string CURRSRC = "";
+
 #ifdef GPLOT
 /*
  * Helper sort functions for plotting
@@ -17,7 +19,6 @@ using namespace std;
 bool sortx(pair<double, double> i, pair<double, double> j) {
 	return i.first < j.first;
 }
-
 bool sorty(pair<double, double> i, pair<double, double> j) {
 	return i.second < j.second;
 }
@@ -65,25 +66,23 @@ void plot (vector<HFAAnnotation*> annotations, int buffer=1) {
 bool validate_ovr (fs::path file_path) {
 	bool valid = file_path.extension() == ".ovr";
 	if (!valid) {
-		cout << "[err] " << file_path << " is not a .ovr file" << endl;
+		Log(ERROR) << file_path << " is not a .ovr file";
 	}
 
 	return valid;
 }
 
 bool validate_rMode (fs::path file_path) {
-	bool valid = !fs::is_directory(file_path) && validate_ovr(file_path);
-	if (!valid) {
-		cout << "[err] invalid source input for READ mode" << endl;
-		cout << "\t- READ mode only support single .ovr file" << endl;
+	if (fs::is_directory(file_path)) {
+		Log(ERROR) << "READ mode only supports single .ovr files";
 	}
 
-	return valid;
+	return validate_ovr(file_path);
 }
 
 bool is_file_valid (fs::path file_path, bool (*validate)(fs::path)) {
 	if (!fs::exists(file_path)) {
-		cout << "[x] " << file_path << " does not exists" << endl;
+		Log(ERROR) << file_path << " does not exists";
 		return false;
 	}
 
@@ -113,25 +112,25 @@ void display (HFAHandle hHFA, HFAAnnotationLayer* hfaal,
 		#ifdef GPLOT
 		plot(annotations);
 		#else
-		cout << "[err] gnuplot is not included in the build" << endl;
+		Log(ERROR) << "GNUPLOT is not included in this build";
 		#endif
 	}	
 }
 
-void ovr2shp (fs::path file_path, fs::path output_dir, char* user_srs) {
-	cout << "[info] converting " << file_path << " ..." << endl;
-
+bool ovr2shp (fs::path file_path, fs::path output_dir, char* user_srs) {
 	HFAHandle hHFA = HFAOpen(file_path.c_str(), "r");
-
 	if (hHFA == NULL) {
-		cout << "[err] failed to open " << file_path << endl;	
+		Log(ERROR) << "HFA driver failed to open " << file_path;
 	}
 
 	HFAAnnotationLayer* hfaal = new HFAAnnotationLayer(hHFA);
+	if (hfaal->is_empty()) {
+		return false;
+	}
 
 	if (user_srs != NULL) {
 		hfaal->set_srs(user_srs);
-		cout << "[info] user defined srs: " << user_srs << endl;
+		Log(INFO) << "user defined srs: " << user_srs;
 	}
 
 	fs::path shp_path = output_dir / 
@@ -142,14 +141,14 @@ void ovr2shp (fs::path file_path, fs::path output_dir, char* user_srs) {
 
 	bool converted = hfaal->to_shp(shp_path);
 	if (converted) {
-		cout << "[info] ✓ success: " << file_path;
-		cout << " -> " << shp_path.parent_path();
-		cout << endl;
+		Log(INFO) << "Successfully converted ✓" 
+			  << "\n";
 	} else {
-		cout << "[err] ✗ failed to convert ";
-		cout << file_path << endl;
+		Log(WARN) << "Failed to convert ✗"
+			  << "\n";
 	}
-	cout << endl;
+
+	return converted;
 }
 
 int main (int argc, char* argv[]) {
@@ -196,39 +195,52 @@ int main (int argc, char* argv[]) {
 	GDALAllRegister();
 
 	if (src_path.empty()) {
-		cout << "no input source" << endl;
+		Log(ERROR) << "No source input specified";
 		exit(100);
 	}
 	
 	if (convertSrc) {
-		cout << "[info] mode: CONVERT" << endl;
-		cout << "[warn] display flags are ignored!" << endl;
-		cout << "output directory: " << output_dir << endl;
+		Log(INFO) << "mode: CONVERT";
+		Log(WARN) << "display flags are ignored";
 
 		if (fs::is_directory(src_path)) {
-			cout << "source directory: " << src_path << endl;
-			cout << endl;
-
+			Log(INFO) << "src: " << src_path
+				  << " "
+				  << "out: " << output_dir;
+			
+			vector<fs::path> failed;
 			fs::recursive_directory_iterator rDirIt(src_path);
 			for (auto& p : rDirIt) {
 				if (p.path().extension() == ".ovr") {
-					ovr2shp(p.path(), output_dir, user_srs);
+					CURRSRC = p.path();	
+					if (!ovr2shp(p.path(), output_dir, user_srs)) {
+						failed.push_back(p.path());
+					}
 				}
 			}
-		} else if (is_file_valid(src_path, validate_ovr)) {
-			cout << "source file: " << src_path << endl;
-			cout << endl;
 
+			if (!failed.empty()) {
+				cout << "Failed to convert: " << endl;
+				vector<fs::path>::const_iterator it = failed.begin();
+				for (;it != failed.end(); it++) {
+					cout << "✗ " << (*it) << endl;
+				}	
+			}
+		} else if (is_file_valid(src_path, validate_ovr)) {
+			Log(INFO) << "src: " << src_path
+				  << " "
+				  << "out: " << output_dir;
+			CURRSRC = src_path;
 			ovr2shp(src_path, output_dir, user_srs);
 		}
 	} else if (is_file_valid(src_path, validate_rMode)) {
-		cout << "[info] mode: READ" << endl;
-		cout << "source file: " << src_path << endl;
-		cout << endl;
+		Log(INFO) << "mode: READ";
+		Log(INFO) << "src: " << src_path;
 
+		CURRSRC = src_path;
 		HFAHandle hHFA = HFAOpen(src_path.c_str(), "r");
 		if (hHFA == NULL) {
-			cout << "[err] failed to open " << src_path << endl;	
+			Log(ERROR) << "HFA driver failed to open " << src_path;
 		}
 
 		HFAAnnotationLayer* hfaal = new HFAAnnotationLayer(hHFA);
