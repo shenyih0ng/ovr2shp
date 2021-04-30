@@ -1,6 +1,3 @@
-#include <cmath>
-#include <vector>
-
 #include "ovr2shp.h"
 
 #ifdef GPLOT

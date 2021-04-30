@@ -1,8 +1,8 @@
 #include <map>
 #include <set>
+#include <cmath>
 #include <vector>
 #include <limits>
-#include <stdio.h>
 #include <iostream>
 #include <filesystem>
 
@@ -330,10 +330,6 @@ class HFAAnnotationLayer {
 		
 		vector<HFAAnnotation*> get_annos () const { return annotations; }
 
-		void add_anno (HFAAnnotation* anno) { 
-			annotations.push_back(anno); 
-		};
-
 		bool is_empty() { return annotations.empty(); }
 
 		int get_num_annos() { return annotations.size(); }
@@ -361,72 +357,54 @@ class HFAAnnotationLayer {
 
 /************************************************************************/
 /*                                                                      */
-/*                       HFA Geometry Factories                         */
+/*                         HFA Geometry Factory                         */
 /*                                                                      */
 /************************************************************************/
 
 /*
  * HFAGeomFactory
  *
- * Factory Interface
+ * Abstract factory
  *
  */
 class HFAGeomFactory {
 	public:
-		virtual HFAGeom* create(HFAEntry*) = 0;
+		typedef HFAGeom* (*Factory)(HFAEntry*);
+
+		bool registerFactory(int gTypeId, string name, Factory const& factory) {
+			return _map.insert(make_pair(gTypeId, factory)).second &&
+				_idMap.insert(make_pair(gTypeId, name)).second;
+		}
+
+		HFAGeom* build (int gTypeId, HFAEntry* node) {
+			map<int, Factory>::const_iterator fIt = _map.find(gTypeId);
+			if (fIt != _map.end()) {
+				Factory f = fIt->second;
+				return (*f)(node);
+			}
+
+			return NULL;
+		}
+
+		bool supports(int gTypeId) {
+			return _map.find(gTypeId) != _map.end();
+		}
+
+		string gTypeIdToStr(int gTypeId) {
+			map<int, string>::const_iterator it = _idMap.find(gTypeId);
+			if (it != _idMap.end()) {
+				return it->second;
+			}
+
+			return NULL;
+		}
+
+	private:	
+		map<int, Factory> _map;
+		map<int, string> _idMap;
 };
 
-/*
- * HFAEllipseFactory
- *
- * Factory for HFA Ellipse geometry nodes
- *
- */
-class HFAEllipseFactory: public HFAGeomFactory {
-	public:
-		HFAEllipse* create(HFAEntry* node) { return new HFAEllipse(node); }
-};
+template <typename DerivedGeom>
+HFAGeom* geomBuilder(HFAEntry* node) { return new DerivedGeom(node); }
 
-/*
- * HFARectangleFactory
- *
- * Factory for HFA Rectangle geometry nodes
- *
- */
-class HFARectangleFactory: public HFAGeomFactory {
-	public:
-		HFARectangle* create(HFAEntry* node) { return new HFARectangle(node); }
-};
-
-/*
- * HFATextFactory
- *
- * Factory for HFA Text geometry nodes
- *
- */
-class HFATextFactory: public HFAGeomFactory {
-	public:
-		HFAText* create(HFAEntry* node) { return new HFAText(node); }
-};
-
-/*
- * HFAPolylineFactory
- *
- * Factory for HFA Polyline geometry nodes
- *
- */
-class HFAPolylineFactory: public HFAGeomFactory {
-	public:
-		HFAPolyline* create(HFAEntry* node) { return new HFAPolyline(node); }
-};
-
-/*
- * HFAPolygonFactory
- *
- * Factory for HFA Polygon geometry nodes
- *
- */
-class HFAPolygonFactory: public HFAGeomFactory {
-	public:
-		HFAPolygon* create(HFAEntry* node) { return new HFAPolygon(node); }
-};
+static HFAGeomFactory geomFactory;

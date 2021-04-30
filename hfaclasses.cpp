@@ -1,36 +1,24 @@
-#include <set>
-#include <math.h>
 #include <iomanip>
 
 #include "ovr2shp.h"
 
 using namespace std;
 
+static const bool registeredText = geomFactory.registerFactory(
+		10, "TEXT", geomBuilder<HFAText>);
+static const bool registeredRect = geomFactory.registerFactory(
+		13, "RECTANGLE", geomBuilder<HFARectangle>);
+static const bool registeredElli = geomFactory.registerFactory(
+		14, "ELLIPSE", geomBuilder<HFAEllipse>);
+static const bool registeredPoly = geomFactory.registerFactory(
+		15, "POLYGON", geomBuilder<HFAPolygon>);
+static const bool registeredLine = geomFactory.registerFactory(
+		16, "LINE", geomBuilder<HFAPolyline>);
+
 extern const string HFA_POLYLINE_COORDS_ATTR_NAME = "coords";
 extern const string HFA_ANNOTATION_XFORM_ATTR_NAME = "xformMatrix";
 extern const string HFA_XFORM_COEF_ATTR_NAME = "polycoefmtx";
 extern const string HFA_XFORM_VECT_ATTR_NAME = "polycoefvector";
-
-/*
- * HFA_GEOM_FACTORIES
- *
- * Supported Eants Geometries
- * {<elmType_enum>, <HFAGeomFactory>}
- */
-const map<int, HFAGeomFactory*> HFA_GEOM_FACTORIES = {
-	{10, new HFATextFactory()},
-	{13, new HFARectangleFactory()},
-	{14, new HFAEllipseFactory()},
-	{16, new HFAPolylineFactory()}
-};
-
-//TEMP
-const map<int, const char*> HFA_GEOM_MAPPING = {
-	{10, "EANT_TEXT"},
-	{13, "EANT_RECTANGLE"},
-	{14, "EANT_ELLIPSE"},
-	{16, "EANT_POLYLINE"}
-};
 
 template <typename T, typename U>
 pair<T,U> operator-(const pair<T,U>& l, double* r) {
@@ -552,14 +540,12 @@ bool _loadData (HFAEntry* hfaEntry) {
 void extract_annotations (HFAEntry* eant, vector<HFAAnnotation*>& annos, HFAAnnotationLayer* hfaal) {
 	if (_loadData(eant)) {
 		int elmType = eant->GetIntField("elmType");
-		map<int, HFAGeomFactory*>::const_iterator factoryEntry = HFA_GEOM_FACTORIES.find(elmType);
-
-		if (elmType != 0 && factoryEntry != HFA_GEOM_FACTORIES.end()) {
+		if (elmType != 0 && geomFactory.supports(elmType)) {
 			HFAEntry* hfaAGeomChild = eant->GetChild();
 			if (_loadData(hfaAGeomChild)) {
 				HFAAnnotation* hfaA = new HFAAnnotation(eant);
 
-				HFAGeom* hfaAGeom = factoryEntry->second->create(hfaAGeomChild);
+				HFAGeom* hfaAGeom = geomFactory.build(elmType, hfaAGeomChild);
 				hfaA->set_geom(hfaAGeom);
 
 				annos.push_back(hfaA);
@@ -711,12 +697,9 @@ bool HFAAnnotationLayer::write_to_shp (const char* driverName, fs::path dst) {
 	vector<GDALDataset*> gdalDatasets;
 	map<int, OGRLayer*> layers;
 
-	for (set<int>::iterator gtIt = geomTypes.begin(); gtIt != geomTypes.end(); ++gtIt) {
-		map<int, const char*>::const_iterator gmapIt = HFA_GEOM_MAPPING.find(*gtIt);
-		const char* geomName = gmapIt->second;
-		
+	for (set<int>::iterator gtIt = geomTypes.begin(); gtIt != geomTypes.end(); ++gtIt) {	
 		fs::path geom_dst = dst;
-		geom_dst += geomName;
+		geom_dst += geomFactory.gTypeIdToStr(*gtIt);
 		geom_dst += ".shp";
 
 		GDALDataset* ds = driver->Create(geom_dst.c_str(), 0, 0, 0, GDT_Unknown,NULL);
