@@ -253,7 +253,6 @@ vector<double> get_matrix (HFAField* hf, GByte* data, GInt32 dataPos, GInt32 dat
  * @param name  string target name
  *
  * @return HFAEntry* HFAEntry of specified name
- *
  */
 HFAEntry* find (HFAEntry* node, string name) {
 	if(node->GetName() == name) {
@@ -279,37 +278,26 @@ HFAEntry* find (HFAEntry* node, string name) {
 	return NULL;
 }
 
-/*
- * find_eants [utility]
- *
- * Find all Eants that currently supported
- *
- * @param eant 		HFAEntry*	 	start node (first child of ElementList)
- * @param tgEants	vector<HFAEntry*>&	collection of extracted Eants that are supported
- *
- */
-void find_eants (HFAEntry* eant, vector<HFAEntry*>& tgEants) {
-	eant->LoadData();
-	int elmType = eant->GetIntField("elmType");
-
-	if (elmType != 0 && HFA_GEOM_FACTORIES.find(elmType) != HFA_GEOM_FACTORIES.end()) {
-		tgEants.push_back(eant);		
-	}
-
-	if (eant->GetChild() != NULL) {
-		find_eants(eant->GetChild(), tgEants);
-	}	
-
-	if (eant->GetNext() != NULL) {
-		find_eants(eant->GetNext(), tgEants);
-	}
-}
-
 /************************************************************************/
 /*                                                                      */
 /*                              HFAEllipse                              */
 /*                                                                      */
 /************************************************************************/
+
+/*
+ * Constructor for HFAEllipse
+ *
+ */
+HFAEllipse::HFAEllipse(HFAEntry* node) {
+	center = new double[2];
+	center[0] = node -> GetDoubleField("center.x");
+	center[1] = node -> GetDoubleField("center.y");
+
+	rotation = node->GetDoubleField("orientation");
+
+	semiMajorAxis = node->GetDoubleField("semiMajorAxis");
+	semiMinorAxis = node->GetDoubleField("semiMinorAxis");
+}
 
 /*
  * get_unorientated_pts
@@ -340,6 +328,10 @@ vector<pair<double, double>> HFAEllipse::get_unorientated_pts () const {
 /*                                                                      */
 /************************************************************************/
 
+/*
+ * Constructor for HFARectangle
+ *
+ */
 HFARectangle::HFARectangle(HFAEntry* node) {
 	center = new double[2];
 	center[0] = node -> GetDoubleField("center.x");
@@ -532,38 +524,74 @@ string HFAAnnotation::get_wkt() const {
 /************************************************************************/
 
 /*
- * Constructor for HFAAnnotationLayer
+ * _loadData [utility]
  *
- * @param handle   HFAHandle HFA File Handle
+ * wrapper for HFAEntry->LoadData()
+ *
+ * @param hfaEntry  HFAEntry*
+ */
+bool _loadData (HFAEntry* hfaEntry) {
+	hfaEntry->LoadData();
+	bool loaded = hfaEntry->GetData() != NULL;
+	if (!loaded) {
+		Log(ERROR) << "Corrupted HFAEntry node found";
+	}
+
+	return loaded;
+}
+
+/*
+ * extract_annotations [utility]
+ *
+ * finds annotation nodes (Element_X_Eant) and insert it into annotation layer
+ *
+ * @param eant 	  HFAEntry*
+ * @param annos   vector<HFAAnnotation*>&	ref to annotation layer annotations
+ * @param hfaal   HFAAnnotationLayer*		pointer to annotation layer instance
+ */
+void extract_annotations (HFAEntry* eant, vector<HFAAnnotation*>& annos, HFAAnnotationLayer* hfaal) {
+	if (_loadData(eant)) {
+		int elmType = eant->GetIntField("elmType");
+		map<int, HFAGeomFactory*>::const_iterator factoryEntry = HFA_GEOM_FACTORIES.find(elmType);
+
+		if (elmType != 0 && factoryEntry != HFA_GEOM_FACTORIES.end()) {
+			HFAEntry* hfaAGeomChild = eant->GetChild();
+			if (_loadData(hfaAGeomChild)) {
+				HFAAnnotation* hfaA = new HFAAnnotation(eant);
+
+				HFAGeom* hfaAGeom = factoryEntry->second->create(hfaAGeomChild);
+				hfaA->set_geom(hfaAGeom);
+
+				annos.push_back(hfaA);
+				hfaal->add_geomType(elmType); // add geomtype as metadata of a layer
+			}
+		}
+	}
+
+	if (eant->GetChild() != NULL) {
+		extract_annotations(eant->GetChild(), annos, hfaal);
+	}	
+
+	if (eant->GetNext() != NULL) {
+		extract_annotations(eant->GetNext(), annos, hfaal);
+	}
+}
+
+/*
+ * Constructor for HFAAnnotationLayer
  *
  */
 HFAAnnotationLayer::HFAAnnotationLayer(HFAHandle hHFA) {
 	hasSRS = extract_proj(hHFA, srs);
 	root = hHFA->poRoot;
 
-	vector<HFAEntry*> elmEants;
-
 	HFAEntry* hfaElmList = find(root, "ElementList");
 	if (hfaElmList != NULL) {
-		find_eants(hfaElmList->GetChild(), elmEants);
+		extract_annotations(hfaElmList->GetChild(), annotations, this);
 	}
 
-	if (elmEants.empty()) {
+	if (annotations.empty()) {
 		Log(WARN) << "No annotation elements found";
-	} else {
-		vector<HFAEntry*>::iterator it;
-		for (it = elmEants.begin(); it != elmEants.end(); ++it) {
-			HFAAnnotation* hfaA = new HFAAnnotation(*it);
-			map<int, HFAGeomFactory*>::const_iterator gIt = HFA_GEOM_FACTORIES.find(
-					(*it)->GetIntField("elmType"));
-			add_geomType(gIt->first); // add geomtype as metadata of alayer
-			HFAEntry* hfaAGeomChild = (*it)->GetChild();
-			HFAGeomFactory* gFactory = gIt->second;
-			HFAGeom* hfaAGeom = gFactory->create(hfaAGeomChild);
-			hfaA->set_geom(hfaAGeom);
-
-			add_anno(hfaA);
-		}
 	}
 }
 
@@ -639,6 +667,28 @@ void HFAAnnotationLayer::display_HFATree(HFAEntry* node, int nIdent) {
 }
 
 /*
+ * createOGRField [utility]
+ *
+ * create field in OGRLayer
+ *
+ * @param layer       OGRLayer*
+ * @param fieldName   const char*
+ * @param dtype       OGRFieldType 	data type of field
+ */
+void createOGRField (OGRLayer* layer, const char* fieldName, OGRFieldType dtype) {
+	OGRFieldDefn field(fieldName, dtype);
+	if (dtype == OFTString) {
+		field.SetWidth(254);
+	}
+
+	if (layer->CreateField(&field) != OGRERR_NONE) {
+		Log(ERROR) << "Failed to create "
+			   << fieldName << " field "
+			   << "in .shp";
+	}
+}
+
+/*
  * write_to_shp
  *
  * - write/export HFAAnnotationLayer to ShapeFile (.shp)
@@ -658,12 +708,10 @@ bool HFAAnnotationLayer::write_to_shp (const char* driverName, fs::path dst) {
 		return false;
 	}
 
-	set<int> gTypes = get_geomTypes();
-	GDALDataset* gdalDatasets[gTypes.size()];
+	vector<GDALDataset*> gdalDatasets;
 	map<int, OGRLayer*> layers;
 
-	int c = 0;
-	for (set<int>::iterator gtIt = gTypes.begin(); gtIt != gTypes.end(); ++gtIt) {
+	for (set<int>::iterator gtIt = geomTypes.begin(); gtIt != geomTypes.end(); ++gtIt) {
 		map<int, const char*>::const_iterator gmapIt = HFA_GEOM_MAPPING.find(*gtIt);
 		const char* geomName = gmapIt->second;
 		
@@ -685,50 +733,24 @@ bool HFAAnnotationLayer::write_to_shp (const char* driverName, fs::path dst) {
 			lgeomType = wkbPoint;
 		} else if ((*gtIt) == 16){
 			lgeomType = wkbLineString;
-		}else {
+		} else {
 			lgeomType = wkbPolygon;
 		}
 
 		l = ds->CreateLayer(NULL,((hasSRS == false) ? NULL: new OGRSpatialReference(get_srs())), lgeomType, NULL);
 		
-		// Layer Fields
-
-		OGRFieldDefn eleIdField("eleId", OFTInteger64);
-		if (l->CreateField(&eleIdField) != OGRERR_NONE) {
-			Log(ERROR) << "Failed to create eleId field in Shapefile";
-			return false;
-		}
-			
-		OGRFieldDefn nameField("name", OFTString);
-		nameField.SetWidth(254);
-		if (l->CreateField(&nameField) != OGRERR_NONE) {
-			Log(ERROR) << "Failed to create name field in Shapefile";
-			return false;
-		}
-
-		OGRFieldDefn descField("desc", OFTString);
-		descField.SetWidth(254);
-		if (l->CreateField(&descField) != OGRERR_NONE) {
-			Log(ERROR) << "Failed to create description field in Shapefile";
-			return false;
-		}
-
+		createOGRField(l, "eleId", OFTInteger64);
+		createOGRField(l, "name", OFTString);
+		createOGRField(l, "desc", OFTString);
+	
 		if ((*gtIt) == 10) {
-			OGRFieldDefn textField("text", OFTString);
-			textField.SetWidth(254);
-			if (l->CreateField(&textField) != OGRERR_NONE) {
-				Log(ERROR) << "Failed to create text field in Shapefile";
-				return false;
-			}
+			createOGRField(l, "text", OFTString);
 		}
 
 		layers.insert(make_pair((*gtIt), l));
-		gdalDatasets[c] = ds;
-		c++;
+		gdalDatasets.push_back(ds);
 	}
 	
-
-	vector<HFAAnnotation*> annotations = get_annos();	
 	vector<HFAAnnotation*>::const_iterator it;
 	for (it = annotations.begin(); it != annotations.end(); ++it) {
 		OGRFeature* feat;
@@ -747,9 +769,7 @@ bool HFAAnnotationLayer::write_to_shp (const char* driverName, fs::path dst) {
 		}
 		
 		string wktStr = (*it)->get_wkt();
-		const char* wkt = wktStr.c_str();
-
-		OGRGeometryFactory::createFromWkt(wkt, NULL, &geom);
+		OGRGeometryFactory::createFromWkt(wktStr.c_str(), NULL, &geom);
 		feat->SetGeometry(geom);
 
 		if (layers[(*it)->get_typeId()]->CreateFeature(feat) != OGRERR_NONE) {
@@ -760,7 +780,7 @@ bool HFAAnnotationLayer::write_to_shp (const char* driverName, fs::path dst) {
 		OGRFeature::DestroyFeature(feat);
 	}
 	
-	for (int dsIdx = 0; dsIdx < gTypes.size(); dsIdx++) {	
+	for (int dsIdx = 0; dsIdx < gdalDatasets.size(); dsIdx++) {	
 		GDALClose(gdalDatasets[dsIdx]);
 	}
 

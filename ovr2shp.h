@@ -75,16 +75,7 @@ class HFAEllipse: public HFAGeom {
 	vector<pair<double, double>> get_unorientated_pts() const;
 
 	public:
-		HFAEllipse (HFAEntry* node) {
-			center = new double[2];
-			center[0] = node -> GetDoubleField("center.x");
-			center[1] = node -> GetDoubleField("center.y");
-
-			rotation = node->GetDoubleField("orientation");		
-
-			semiMajorAxis = node->GetDoubleField("semiMajorAxis");
-			semiMinorAxis = node->GetDoubleField("semiMinorAxis");
-		};
+		HFAEllipse (HFAEntry*);
 
 		double* get_center() { return center; };
 
