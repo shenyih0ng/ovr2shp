@@ -115,7 +115,7 @@ void display (HFAHandle hHFA, HFAAnnotationLayer* hfaal,
 }
 
 bool ovr2shp (fs::path file_path, fs::path output_dir, char* user_srs) {
-	HFAHandle hHFA = HFAOpen(file_path.c_str(), "r");
+	HFAHandle hHFA = HFAOpen(file_path.string().c_str(), "r");
 	if (hHFA == NULL) {
 		Log(ERROR) << "HFA driver failed to open " << file_path;
 	}
@@ -138,7 +138,7 @@ bool ovr2shp (fs::path file_path, fs::path output_dir, char* user_srs) {
 
 	bool converted = hfaal->to_shp(shp_path);
 	if (converted) {
-		Log(INFO) << "Successfully converted ✓" 
+		Log(INFO) << "Successfully converted ✓"
 			  << "\n";
 	} else {
 		Log(WARN) << "Failed to convert ✗"
@@ -209,7 +209,7 @@ int main (int argc, char* argv[]) {
 			fs::recursive_directory_iterator rDirIt(src_path);
 			for (auto& p : rDirIt) {
 				if (p.path().extension() == ".ovr") {
-					CURRSRC = p.path();	
+					CURRSRC = p.path().string();
 					if (!ovr2shp(p.path(), output_dir, user_srs)) {
 						failed.push_back(p.path());
 					}
@@ -227,15 +227,15 @@ int main (int argc, char* argv[]) {
 			Log(INFO) << "src: " << src_path
 				  << " "
 				  << "out: " << output_dir;
-			CURRSRC = src_path;
+			CURRSRC = src_path.string();
 			ovr2shp(src_path, output_dir, user_srs);
 		}
 	} else if (is_file_valid(src_path, validate_rMode)) {
 		Log(INFO) << "mode: READ";
 		Log(INFO) << "src: " << src_path;
 
-		CURRSRC = src_path;
-		HFAHandle hHFA = HFAOpen(src_path.c_str(), "r");
+		CURRSRC = src_path.string();
+		HFAHandle hHFA = HFAOpen(src_path.string().c_str(), "r");
 		if (hHFA == NULL) {
 			Log(ERROR) << "HFA driver failed to open " << src_path;
 		}

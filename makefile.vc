@@ -1,0 +1,11 @@
+#GDAL_LIB = <gdal-lib-path>
+#GDAL_INCLUDE = <gdal-include-path>
+
+CXX = cl.exe
+CXXFLAGS = /std:c++17 
+INCLUDES = /I./hfa /I $(GDAL_INCLUDE)
+
+OBJECTS = .\hfa\*.obj ovr2shp.cpp hfaclasses.cpp hfasrs.cpp
+
+build: $(OBJECTS)
+    $(CXX) $(CXXFLAGS) $(INCLUDES) $(OBJECTS) /link /LIBPATH $(GDAL_LIB) /OUT:ovr2shp.exe

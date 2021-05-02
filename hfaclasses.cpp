@@ -702,7 +702,7 @@ bool HFAAnnotationLayer::write_to_shp (const char* driverName, fs::path dst) {
 		geom_dst += geomFactory.gTypeIdToStr(*gtIt);
 		geom_dst += ".shp";
 
-		GDALDataset* ds = driver->Create(geom_dst.c_str(), 0, 0, 0, GDT_Unknown,NULL);
+		GDALDataset* ds = driver->Create(geom_dst.string().c_str(), 0, 0, 0, GDT_Unknown,NULL);
 		if (ds == NULL) {
 			Log(ERROR) << "Unable to create file "
 				   << geom_dst;
