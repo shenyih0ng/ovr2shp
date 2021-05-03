@@ -1,1 +1,0 @@
-(window.webpackJsonp=window.webpackJsonp||[]).push([[7],{77:function(a){a.exports=JSON.parse('{"hfa":{"allTagsPath":"/ovr2shp/tags","slug":"hfa","name":"hfa","count":1,"permalink":"/ovr2shp/tags/hfa"},"ovr":{"allTagsPath":"/ovr2shp/tags","slug":"ovr","name":"ovr","count":1,"permalink":"/ovr2shp/tags/ovr"}}')}}]);
