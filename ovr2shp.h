@@ -1,13 +1,13 @@
+#include <cmath>
+#include <filesystem>
+#include <iostream>
+#include <limits>
 #include <map>
 #include <set>
-#include <cmath>
 #include <vector>
-#include <limits>
-#include <iostream>
-#include <filesystem>
 
-#include "ogrsf_frmts.h" // GDAL vector drivers
 #include "hfa_p.h"
+#include "ogrsf_frmts.h" // GDAL vector drivers
 
 #include "logging.h"
 
@@ -24,15 +24,16 @@ extern const string HFA_XFORM_VECT_ATTR_NAME;
  *
  */
 
-HFAEntry* find (HFAEntry* node, string name);
+HFAEntry *find(HFAEntry *node, string name);
 
-vector<pair<double, double>> rotate (vector<pair<double, double>> pts, double* center, double orientation);
+vector<pair<double, double>> rotate(vector<pair<double, double>> pts,
+                                    double *center, double orientation);
 
-bool extract_proj (HFAHandle hHFA, OGRSpatialReference& srs);
+bool extract_proj(HFAHandle hHFA, OGRSpatialReference &srs);
 
-string to_polyWKT (vector<pair<double, double>> pts);
+string to_polyWKT(vector<pair<double, double>> pts);
 
-string to_linestrWKT (vector<pair<double, double>> pts);
+string to_linestrWKT(vector<pair<double, double>> pts);
 
 /************************************************************************/
 /*                                                                      */
@@ -43,18 +44,18 @@ string to_linestrWKT (vector<pair<double, double>> pts);
 /************************************************************************/
 
 class HFAGeom {
-	public:
-		virtual ~HFAGeom (){}; // for dynamic_cast
-	
-		virtual vector<pair<double, double>> get_pts() const = 0;
+  public:
+    virtual ~HFAGeom(){}; // for dynamic_cast
 
-		virtual void write(ostream&) const = 0;
+    virtual vector<pair<double, double>> get_pts() const = 0;
 
-		friend ostream& operator<<(ostream& os, const HFAGeom& hg){
-			hg.write(os);
+    virtual void write(ostream &) const = 0;
 
-			return os;
-		}
+    friend ostream &operator<<(ostream &os, const HFAGeom &hg) {
+        hg.write(os);
+
+        return os;
+    }
 };
 
 /************************************************************************/
@@ -65,36 +66,36 @@ class HFAGeom {
 /*                                                                      */
 /************************************************************************/
 
-class HFAEllipse: public HFAGeom {
-	double* center;
-	double rotation;
+class HFAEllipse : public HFAGeom {
+    double *center;
+    double rotation;
 
-	double semiMajorAxis;
-	double semiMinorAxis;
+    double semiMajorAxis;
+    double semiMinorAxis;
 
-	vector<pair<double, double>> get_unorientated_pts() const;
+    vector<pair<double, double>> get_unorientated_pts() const;
 
-	public:
-		HFAEllipse (HFAEntry*);
+  public:
+    HFAEllipse(HFAEntry *);
 
-		double* get_center() { return center; };
+    double *get_center() { return center; };
 
-		double get_rotation() { return rotation; };
+    double get_rotation() { return rotation; };
 
-		double get_majX () { return semiMajorAxis; };
+    double get_majX() { return semiMajorAxis; };
 
-		double get_minX () { return semiMinorAxis; };
-		
-		vector<pair<double, double>> get_pts() const {
-			return rotate(get_unorientated_pts(), center, rotation);
-		}
+    double get_minX() { return semiMinorAxis; };
 
-		void write (ostream &os) const {
-			os << "center: " << center[0] << ", " << center[1] << endl;
-			os << "rotation: " << rotation << endl;
-			os << "majx: " << semiMajorAxis << endl;
-			os << "minx: " << semiMinorAxis << endl;
-		}
+    vector<pair<double, double>> get_pts() const {
+        return rotate(get_unorientated_pts(), center, rotation);
+    }
+
+    void write(ostream &os) const {
+        os << "center: " << center[0] << ", " << center[1] << endl;
+        os << "rotation: " << rotation << endl;
+        os << "majx: " << semiMajorAxis << endl;
+        os << "minx: " << semiMinorAxis << endl;
+    }
 };
 
 /************************************************************************/
@@ -105,36 +106,36 @@ class HFAEllipse: public HFAGeom {
 /*                                                                      */
 /************************************************************************/
 
-class HFARectangle: public HFAGeom {
-	double* center;
-	double rotation;
+class HFARectangle : public HFAGeom {
+    double *center;
+    double rotation;
 
-	double width;
-	double height;
-	
-	vector<pair<double, double>> get_unorientated_pts() const;
+    double width;
+    double height;
 
-	public:
-		HFARectangle (HFAEntry*);
+    vector<pair<double, double>> get_unorientated_pts() const;
 
-		double* get_center() { return center; };
+  public:
+    HFARectangle(HFAEntry *);
 
-		double get_rotation() { return rotation; };
+    double *get_center() { return center; };
 
-		double get_width() { return width; };
+    double get_rotation() { return rotation; };
 
-		double get_height() { return height; };
-		
-		vector<pair<double, double>> get_pts() const {
-			return rotate(get_unorientated_pts(), center, rotation);
-		}
-		
-		void write (ostream &os) const {
-			os << "center: " << center[0] << ", " << center[1] << endl;
-			os << "rotation: " << rotation << endl;
-			os << "width: " << width << " " << endl;
-			os << "height: " << height << " " << endl;
-		}
+    double get_width() { return width; };
+
+    double get_height() { return height; };
+
+    vector<pair<double, double>> get_pts() const {
+        return rotate(get_unorientated_pts(), center, rotation);
+    }
+
+    void write(ostream &os) const {
+        os << "center: " << center[0] << ", " << center[1] << endl;
+        os << "rotation: " << rotation << endl;
+        os << "width: " << width << " " << endl;
+        os << "height: " << height << " " << endl;
+    }
 };
 
 /************************************************************************/
@@ -145,16 +146,16 @@ class HFARectangle: public HFAGeom {
 /*                                                                      */
 /************************************************************************/
 
-class HFAPolyline: public HFAGeom {
-	protected:
-		vector<pair<double, double>> pts;
-	
-	public:
-		HFAPolyline(HFAEntry* node);
+class HFAPolyline : public HFAGeom {
+  protected:
+    vector<pair<double, double>> pts;
 
-		void write (ostream &os) const { return; }
+  public:
+    HFAPolyline(HFAEntry *node);
 
-		vector<pair<double, double>> get_pts() const { return pts; }
+    void write(ostream &os) const { return; }
+
+    vector<pair<double, double>> get_pts() const { return pts; }
 };
 
 /************************************************************************/
@@ -165,12 +166,12 @@ class HFAPolyline: public HFAGeom {
 /*                                                                      */
 /************************************************************************/
 
-class HFAPolygon: public HFAPolyline  {
-	public:
-		HFAPolygon(HFAEntry* node):HFAPolyline(node){
-			// enclose line to turn it into a polygon
-			pts.push_back(pts[0]);
-		};
+class HFAPolygon : public HFAPolyline {
+  public:
+    HFAPolygon(HFAEntry *node) : HFAPolyline(node) {
+        // enclose line to turn it into a polygon
+        pts.push_back(pts[0]);
+    };
 };
 
 /************************************************************************/
@@ -181,36 +182,35 @@ class HFAPolygon: public HFAPolyline  {
 /*                                                                      */
 /************************************************************************/
 
-class HFAText: public HFAGeom {
-	double* origin;
-	const char* text;
+class HFAText : public HFAGeom {
+    double *origin;
+    const char *text;
 
-	public:
-		HFAText(HFAEntry* node) {
-			origin = new double[2];
-			origin[0] = node->GetDoubleField("origin.x");
-			origin[1] = node->GetDoubleField("origin.y");
+  public:
+    HFAText(HFAEntry *node) {
+        origin = new double[2];
+        origin[0] = node->GetDoubleField("origin.x");
+        origin[1] = node->GetDoubleField("origin.y");
 
-			text = node->GetStringField("text.string");
-		}
+        text = node->GetStringField("text.string");
+    }
 
-		double* get_origin() { return origin; };
+    double *get_origin() { return origin; };
 
-		const char* get_text () { return text; };
+    const char *get_text() { return text; };
 
-		vector<pair<double, double>> get_pts() const {
-			vector<pair<double, double>> pts;
-			pts.push_back(make_pair(origin[0], origin[1]));
+    vector<pair<double, double>> get_pts() const {
+        vector<pair<double, double>> pts;
+        pts.push_back(make_pair(origin[0], origin[1]));
 
-			return pts;
-		}
+        return pts;
+    }
 
-		void write (ostream &os) const {
-			os << "origin: " << origin[0] << ", " << origin[1] << endl;
-			os << "textval: " << text << endl;
-		}
+    void write(ostream &os) const {
+        os << "origin: " << origin[0] << ", " << origin[1] << endl;
+        os << "textval: " << text << endl;
+    }
 };
-
 
 /************************************************************************/
 /*                                                                      */
@@ -222,70 +222,71 @@ class HFAText: public HFAGeom {
 /************************************************************************/
 
 class HFAAnnotation {
-	int id;
-	const char* name;
-	const char* description;
-	const char* elmType;
-	int elmTypeId;
+    int id;
+    const char *name;
+    const char *description;
+    const char *elmType;
+    int elmTypeId;
 
-	HFAGeom* geom;
-		
-	/*
-	 * coord_vect (1x3)
-	 * {x, y, z}
-	 *
-	 * xform (3x3)
-	 * { xform[0] xform[1], -- coef
-	 *   xform[2] xform[3], -- coef
-	 *   xform[4] xform[5]  -- vect }
-	 *
-	 */
-	double xform[6];
+    HFAGeom *geom;
 
-	public:
-		HFAAnnotation (HFAEntry*);
- 
-		int get_id() { return id; };
+    /*
+     * coord_vect (1x3)
+     * {x, y, z}
+     *
+     * xform (3x3)
+     * { xform[0] xform[1], -- coef
+     *   xform[2] xform[3], -- coef
+     *   xform[4] xform[5]  -- vect }
+     *
+     */
+    double xform[6];
 
-		const char* get_name() { return name; };
+  public:
+    HFAAnnotation(HFAEntry *);
 
-		const char* get_desc() { return description; };
+    int get_id() { return id; };
 
-		const char* get_type() { return elmType; };
+    const char *get_name() { return name; };
 
-		double* get_xform() { return xform; };
+    const char *get_desc() { return description; };
 
-		int get_typeId () { return elmTypeId; };
+    const char *get_type() { return elmType; };
 
-		HFAGeom* get_geom() { return geom; };
+    double *get_xform() { return xform; };
 
-		void set_geom(HFAGeom* g) { geom=g; };
-		
-		vector<pair<double, double>> get_pts() const;
+    int get_typeId() { return elmTypeId; };
 
-		string get_wkt() const;
+    HFAGeom *get_geom() { return geom; };
 
-		friend ostream& operator<<(ostream& os, const HFAAnnotation& ha) {
-			os << "id: " << ha.id << endl;
-			os << "type: " << ha.elmType << " [" << ha.elmTypeId << "]" << endl;
-			os << "name: " << ((ha.name == NULL) ? "" : ha.name) << endl;
-			os << "description: " << ((ha.description == NULL) ? "" : ha.description) << endl;
+    void set_geom(HFAGeom *g) { geom = g; };
 
-			os.precision(numeric_limits<long double>::digits10 + 1);
-			os << "xform: " << endl;
-			for (int i = 0; i < 6; i+=2) {
-				os << "\t" << ha.xform[i];
-				os << " " << ha.xform[i+1];
-				os << endl;
-			}
-			os << endl;
+    vector<pair<double, double>> get_pts() const;
 
-			os << *ha.geom;
-			os << ha.get_wkt();
-			os << endl;
+    string get_wkt() const;
 
-			return os;	
-		}
+    friend ostream &operator<<(ostream &os, const HFAAnnotation &ha) {
+        os << "id: " << ha.id << endl;
+        os << "type: " << ha.elmType << " [" << ha.elmTypeId << "]" << endl;
+        os << "name: " << ((ha.name == NULL) ? "" : ha.name) << endl;
+        os << "description: "
+           << ((ha.description == NULL) ? "" : ha.description) << endl;
+
+        os.precision(numeric_limits<long double>::digits10 + 1);
+        os << "xform: " << endl;
+        for (int i = 0; i < 6; i += 2) {
+            os << "\t" << ha.xform[i];
+            os << " " << ha.xform[i + 1];
+            os << endl;
+        }
+        os << endl;
+
+        os << *ha.geom;
+        os << ha.get_wkt();
+        os << endl;
+
+        return os;
+    }
 };
 
 /************************************************************************/
@@ -298,61 +299,61 @@ class HFAAnnotation {
 /************************************************************************/
 
 class HFAAnnotationLayer {
-	HFAHandle hHFA;
-	HFAEntry* root;
-	
-	bool hasSRS = false;
-	OGRSpatialReference srs;
-	vector<HFAAnnotation*> annotations;
+    HFAHandle hHFA;
+    HFAEntry *root;
 
-	GDALDataset *gdalDs;
+    bool hasSRS = false;
+    OGRSpatialReference srs;
+    vector<HFAAnnotation *> annotations;
 
-	set<int> geomTypes;
+    GDALDataset *gdalDs;
 
-	void display_HFATree(HFAEntry* node, int nIdent);
+    set<int> geomTypes;
 
-	bool write_to_shp (const char*, fs::path);
+    void display_HFATree(HFAEntry *node, int nIdent);
 
-	public:
-		HFAAnnotationLayer (HFAHandle);
+    bool write_to_shp(const char *, fs::path);
 
-		OGRSpatialReference get_srs () { return srs; };
+  public:
+    HFAAnnotationLayer(HFAHandle);
 
-		void set_srs (OGRSpatialReference new_srs) { 
-			hasSRS = true;
-			srs = new_srs; 
-		};
+    OGRSpatialReference get_srs() { return srs; };
 
-		void set_srs (char* proj4srs) {
-			hasSRS = true;
-			srs.importFromProj4(proj4srs);	
-		};
-		
-		vector<HFAAnnotation*> get_annos () const { return annotations; }
+    void set_srs(OGRSpatialReference new_srs) {
+        hasSRS = true;
+        srs = new_srs;
+    };
 
-		bool is_empty() { return annotations.empty(); }
+    void set_srs(char *proj4srs) {
+        hasSRS = true;
+        srs.importFromProj4(proj4srs);
+    };
 
-		int get_num_annos() { return annotations.size(); }
+    vector<HFAAnnotation *> get_annos() const { return annotations; }
 
-		set<int> get_geomTypes () { return geomTypes; }
+    bool is_empty() { return annotations.empty(); }
 
-		void add_geomType (int nGeomType) { geomTypes.insert(nGeomType); }
+    int get_num_annos() { return annotations.size(); }
 
-		bool to_shp (fs::path dst) {
-			const char* shpDriverName = "ESRI Shapefile";
-			return write_to_shp(shpDriverName, dst);	
-		};
+    set<int> get_geomTypes() { return geomTypes; }
 
-		bool to_gjson (char* ofilename) {
-			//TODO  @NotImplemented
-			const char* gjsonDriverName = "GeoJSON";
-			cerr << "GeoJSON is not supported yet!" << endl;
-			return false;
-		};
+    void add_geomType(int nGeomType) { geomTypes.insert(nGeomType); }
 
-		void printTree () { display_HFATree(root, 0); }
+    bool to_shp(fs::path dst) {
+        const char *shpDriverName = "ESRI Shapefile";
+        return write_to_shp(shpDriverName, dst);
+    };
 
-		friend ostream& operator<<(ostream&, const HFAAnnotationLayer&);
+    bool to_gjson(char *ofilename) {
+        // TODO  @NotImplemented
+        const char *gjsonDriverName = "GeoJSON";
+        cerr << "GeoJSON is not supported yet!" << endl;
+        return false;
+    };
+
+    void printTree() { display_HFATree(root, 0); }
+
+    friend ostream &operator<<(ostream &, const HFAAnnotationLayer &);
 };
 
 /************************************************************************/
@@ -368,43 +369,42 @@ class HFAAnnotationLayer {
  *
  */
 class HFAGeomFactory {
-	public:
-		typedef HFAGeom* (*Factory)(HFAEntry*);
+  public:
+    typedef HFAGeom *(*Factory)(HFAEntry *);
 
-		bool registerFactory(int gTypeId, string name, Factory const& factory) {
-			return _map.insert(make_pair(gTypeId, factory)).second &&
-				_idMap.insert(make_pair(gTypeId, name)).second;
-		}
+    bool registerFactory(int gTypeId, string name, Factory const &factory) {
+        return _map.insert(make_pair(gTypeId, factory)).second &&
+               _idMap.insert(make_pair(gTypeId, name)).second;
+    }
 
-		HFAGeom* build (int gTypeId, HFAEntry* node) {
-			map<int, Factory>::const_iterator fIt = _map.find(gTypeId);
-			if (fIt != _map.end()) {
-				Factory f = fIt->second;
-				return (*f)(node);
-			}
+    HFAGeom *build(int gTypeId, HFAEntry *node) {
+        map<int, Factory>::const_iterator fIt = _map.find(gTypeId);
+        if (fIt != _map.end()) {
+            Factory f = fIt->second;
+            return (*f)(node);
+        }
 
-			return NULL;
-		}
+        return NULL;
+    }
 
-		bool supports(int gTypeId) {
-			return _map.find(gTypeId) != _map.end();
-		}
+    bool supports(int gTypeId) { return _map.find(gTypeId) != _map.end(); }
 
-		string gTypeIdToStr(int gTypeId) {
-			map<int, string>::const_iterator it = _idMap.find(gTypeId);
-			if (it != _idMap.end()) {
-				return it->second;
-			}
+    string gTypeIdToStr(int gTypeId) {
+        map<int, string>::const_iterator it = _idMap.find(gTypeId);
+        if (it != _idMap.end()) {
+            return it->second;
+        }
 
-			return NULL;
-		}
+        return NULL;
+    }
 
-	private:	
-		map<int, Factory> _map;
-		map<int, string> _idMap;
+  private:
+    map<int, Factory> _map;
+    map<int, string> _idMap;
 };
 
-template <typename DerivedGeom>
-HFAGeom* geomBuilder(HFAEntry* node) { return new DerivedGeom(node); }
+template <typename DerivedGeom> HFAGeom *geomBuilder(HFAEntry *node) {
+    return new DerivedGeom(node);
+}
 
 static HFAGeomFactory geomFactory;
