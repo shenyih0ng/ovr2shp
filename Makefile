@@ -5,8 +5,10 @@ INCLUDES := -I./hfa
 
 OBJECTS := ./hfa/*.o ovr2shp.cpp hfaclasses.cpp hfasrs.cpp 
 
-build: ${OBJECTS} 
+build:
+	./build_dep.sh
 	${CXX} ${OBJECTS} ${INCLUDES} ${CXXFLAGS} -o ovr2shp
 
-build-gnuplot: ${OBJECTS}
+build-gnuplot:
+	./build_dep.sh
 	${CXX} ${OBJECTS} ${INCLUDES} ${CXXFLAGS_GNUPLOT} -DGPLOT -o ovr2shp
